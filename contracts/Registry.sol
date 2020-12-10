@@ -92,14 +92,11 @@ contract Registry is IRegistry {
     view
     override
     returns (
-      bool canExecute,
-      uint256 totalPayment,
-      uint256 primaryPayment,
-      uint256 secondaryPayment
+      bool canExecute
     )
   {
     Job storage job = jobs[msg.sender];
-    (totalPayment, primaryPayment, secondaryPayment) = getPaymentAmounts(msg.sender);
+    (uint256 totalPayment,,) = getPaymentAmounts(msg.sender);
     if (job.balance >= totalPayment) {
       ChainlinkKeeperInterface target = ChainlinkKeeperInterface(job.target);
       bytes memory executeData = abi.encodeWithSelector(target.query.selector, job.executeData);

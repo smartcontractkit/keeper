@@ -12,23 +12,11 @@ contract Executor {
   }
 
   function canExecute()
-    external
+    public
     view
     returns (bool success)
   {
-    (success,,) = _canExecute();
-  }
-
-  function _canExecute()
-    internal
-    view
-    returns (
-      bool success,
-      uint256 primaryPayment,
-      uint256 secondaryPayment
-    )
-  {
-    (success,, primaryPayment, secondaryPayment) = registry.queryJob();
+    return registry.queryJob();
   }
 
   function execute(
@@ -36,7 +24,7 @@ contract Executor {
   )
     external
   {
-    (bool success, uint256 primaryPayment, uint256 secondaryPayment) = _canExecute();
+    (bool success) = canExecute();
     require(success, "!canExecute");
     registry.executeJob(msg.sender);
   }
