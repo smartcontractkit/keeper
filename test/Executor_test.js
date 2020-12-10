@@ -21,7 +21,7 @@ contract('Executor', (accounts) => {
   const rewardCallers = new BN('3')
 
   const stopMining = async () => {
-    await web3.currentProvider.send({
+    return web3.currentProvider.send({
       jsonrpc: '2.0',
       method: 'miner_stop',
       id: new Date().getMilliseconds(),
@@ -30,7 +30,7 @@ contract('Executor', (accounts) => {
   }
 
   const startMining = async () => {
-    await web3.currentProvider.send({
+    return web3.currentProvider.send({
       jsonrpc: '2.0',
       method: 'miner_start',
       id: new Date().getMilliseconds(),
@@ -39,7 +39,7 @@ contract('Executor', (accounts) => {
   }
 
   const queueExecute = async (from, to, data) => {
-    return await web3.currentProvider.send({
+    return web3.currentProvider.send({
       jsonrpc: '2.0',
       method: 'eth_sendTransaction',
       id: new Date().getMilliseconds(),
@@ -54,7 +54,7 @@ contract('Executor', (accounts) => {
   }
 
   const queueExecute2 = async (from, to, data) => {
-    return await web3.eth.sendTransaction({
+    return web3.eth.sendTransaction({
       from: from,
       to: to,
       gas: extraGas,
