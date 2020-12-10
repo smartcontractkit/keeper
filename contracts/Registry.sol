@@ -125,13 +125,8 @@ contract Registry is IRegistry {
 
     (, uint256 _primaryPayment, uint256 _secondaryPayment) = getPaymentAmounts(msg.sender);
     s_job.called[block.number][_caller] = true;
-    if (m_job.lastExecuted == block.number && count < m_job.rewardCallers) {
-      s_job.balance = uint96(uint256(m_job.balance).sub(_secondaryPayment));
-      LINK.transfer(_caller, _secondaryPayment);
-    } else {
-      s_job.balance = uint96(uint256(m_job.balance).sub(_primaryPayment));
-      LINK.transfer(_caller, _primaryPayment);
-    }
+    s_job.balance = uint96(uint256(m_job.balance).sub(_primaryPayment));
+    LINK.transfer(_caller, _primaryPayment);
 
     s_job.count[block.number] = uint8(uint256(count).add(1));
     // ensure second+ callers are still supplying enough gas

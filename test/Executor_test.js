@@ -12,57 +12,10 @@ contract('Executor', (accounts) => {
   const user3 = accounts[3]
   const linkEth = new BN('30000000000000000')
   const gasWei = new BN('100000000000')
-  const querySelector = '0x78b90337'
-  const executeSelector = '0x09c5eabe'
-  const executeData = executeSelector +
-    '0000000000000000000000000000000000000000000000000000000000000020' +
-    '0000000000000000000000000000000000000000000000000000000000000000'
   const executeGas = new BN('100000')
   const extraGas = new BN('250000')
   const emptyBytes = '0x00'
   const rewardCallers = new BN('3')
-
-  const stopMining = async () => {
-    return web3.currentProvider.send({
-      jsonrpc: '2.0',
-      method: 'miner_stop',
-      id: new Date().getMilliseconds(),
-      params: []
-    })
-  }
-
-  const startMining = async () => {
-    return web3.currentProvider.send({
-      jsonrpc: '2.0',
-      method: 'miner_start',
-      id: new Date().getMilliseconds(),
-      params: [1]
-    })
-  }
-
-  const queueExecute = async (from, to, data) => {
-    return web3.currentProvider.send({
-      jsonrpc: '2.0',
-      method: 'eth_sendTransaction',
-      id: new Date().getMilliseconds(),
-      params: [{
-        from: from,
-        to: to,
-        value: 0,
-        gas: extraGas,
-        data: data
-      }]
-    })
-  }
-
-  const queueExecute2 = async (from, to, data) => {
-    return web3.eth.sendTransaction({
-      from: from,
-      to: to,
-      gas: extraGas,
-      data: data
-    })
-  }
 
   beforeEach(async () => {
     LinkToken.setProvider(web3.currentProvider)
@@ -212,42 +165,6 @@ contract('Executor', (accounts) => {
             this.executor.execute("0x", { from: user2 }),
             '!canExecute'
           )
-        })
-
-        /*
-         * TODO:
-         * These tests must be skipped because Ganache is not playing nice with
-         * testing multiple function calls in the same block. Ideally, we would
-         * want to stop mining, queue up a bunch of transactions, then start
-         * mining again. Once mining starts, all the queued transactions would
-         * be included in the same block and we could get the receipts for each.
-         * However, what is happening is all queued transactions are reverting,
-         * regardless if they "should" or not.
-         */
-        it.skip('rewards secondary callers', async () => {
-          await stopMining()
-          await queueExecute2(user1, this.executor.address, executeData)
-          await queueExecute2(user2, this.executor.address, executeData)
-          await queueExecute2(user3, this.executor.address, executeData)
-          await startMining()
-        })
-
-        it.skip('does not rewards secondary callers after rewardCallers', async () => {
-          await stopMining()
-          await queueExecute2(user1, this.executor.address, executeData)
-          await queueExecute2(user2, this.executor.address, executeData)
-          await queueExecute2(user3, this.executor.address, executeData)
-          const tx = await queueExecute2(maintainer, this.executor.address, executeData)
-          await startMining()
-          await expectRevert.unspecified(tx) // revert reason should be '!count'
-        })
-
-        it.skip('reverts if same caller calls twice in same block', async () => {
-          await stopMining()
-          await queueExecute2(user1, this.executor.address, executeData)
-          const tx = await queueExecute2(user1, this.executor.address, executeData)
-          await startMining()
-          await expectRevert.unspecified(tx) // revert reason should be 'called'
         })
       })
     })
