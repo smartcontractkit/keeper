@@ -1,18 +1,33 @@
 pragma solidity 0.6.12;
 
-contract Dummy {
+import '../ChainlinkKeeperInterface.sol';
+
+contract Dummy is ChainlinkKeeperInterface {
   bool internal _canExecute;
 
   function setCanExecute(bool _value) public {
     _canExecute = _value;
   }
 
-  function canExecute() public view returns (bool) {
-    return _canExecute;
+  function query(bytes calldata data)
+    public
+    view
+    override
+    returns (
+      bool callable,
+      bytes calldata executedata
+    )
+  {
+    return (_canExecute, data);
   }
 
-  function execute() external {
-    require(canExecute(), "Cannot execute");
+  function execute(
+    bytes calldata
+  )
+    external
+    override
+  {
+    require(_canExecute, "Cannot execute");
     setCanExecute(false);
   }
 

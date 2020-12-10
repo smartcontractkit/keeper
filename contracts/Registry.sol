@@ -7,6 +7,7 @@ import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/Address.sol";
 import "./Executor.sol";
 import "./IRegistry.sol";
+import "./ChainlinkKeeperInterface.sol";
 
 contract Registry is IRegistry {
   using Address for address;
@@ -21,8 +22,6 @@ contract Registry is IRegistry {
   AggregatorInterface public immutable FASTGAS;
 
   struct Job {
-    bytes4 querySelector;
-    bytes4 executeSelector;
     uint8 rewardCallers;
     address target;
     uint32 executeGas;
@@ -49,7 +48,6 @@ contract Registry is IRegistry {
   event Executed(
     address indexed executor,
     address indexed target,
-    bytes4 executeSelector,
     bool success
   );
 
@@ -67,8 +65,6 @@ contract Registry is IRegistry {
 
   function addJob(
     address _target,
-    bytes4 _querySelector,
-    bytes4 _executeSelector,
     uint32 _gasLimit,
     uint8 _rewardCallers,
     bytes calldata _executeData
@@ -78,12 +74,10 @@ contract Registry is IRegistry {
     require(_target.isContract(), "!contract");
     require(_rewardCallers > 0, "!rewardCallers");
     require(_gasLimit > 23000, "!gasLimit");
-    require(_validateQueryFunction(_target, _querySelector), "!query");
+    require(_validateQueryFunction(_target), "!query");
     Executor executor = new Executor();
     jobs[address(executor)] = Job({
       target: _target,
-      querySelector: _querySelector,
-      executeSelector: _executeSelector,
       executeGas: _gasLimit,
       rewardCallers: _rewardCallers,
       balance: 0,
@@ -107,7 +101,9 @@ contract Registry is IRegistry {
     Job storage job = jobs[msg.sender];
     (totalPayment, primaryPayment, secondaryPayment) = getPaymentAmounts(msg.sender);
     if (job.balance >= totalPayment) {
-      (, bytes memory result) = job.target.staticcall(abi.encodeWithSelector(job.querySelector));
+      ChainlinkKeeperInterface target = ChainlinkKeeperInterface(job.target);
+      bytes memory executeData = abi.encodeWithSelector(target.query.selector, job.executeData);
+      (, bytes memory result) = job.target.staticcall(executeData);
       ( canExecute ) = abi.decode(result, (bool));
     } else {
       canExecute = false;
@@ -115,9 +111,7 @@ contract Registry is IRegistry {
   }
 
   function executeJob(
-    address _caller,
-    uint256 _primaryPayment,
-    uint256 _secondaryPayment
+    address _caller
   )
     external
     override
@@ -125,8 +119,11 @@ contract Registry is IRegistry {
     Job storage s_job = jobs[msg.sender];
     Job memory m_job = s_job;
     uint256 count = s_job.count[block.number];
+
     require(count <= m_job.rewardCallers, "!count");
     require(!s_job.called[block.number][_caller], "called");
+
+    (, uint256 _primaryPayment, uint256 _secondaryPayment) = getPaymentAmounts(msg.sender);
     s_job.called[block.number][_caller] = true;
     if (m_job.lastExecuted == block.number && count < m_job.rewardCallers) {
       s_job.balance = uint96(uint256(m_job.balance).sub(_secondaryPayment));
@@ -135,13 +132,15 @@ contract Registry is IRegistry {
       s_job.balance = uint96(uint256(m_job.balance).sub(_primaryPayment));
       LINK.transfer(_caller, _primaryPayment);
     }
+
     s_job.count[block.number] = uint8(uint256(count).add(1));
     // ensure second+ callers are still supplying enough gas
     require(gasleft() > m_job.executeGas, "!gasleft");
     if (count < 1) {
       s_job.lastExecuted = uint64(block.number);
-      (bool success,) = m_job.target.call{gas: m_job.executeGas}(abi.encodeWithSelector(m_job.executeSelector, m_job.executeData));
-      emit Executed(msg.sender, m_job.target, m_job.executeSelector, success);
+      ChainlinkKeeperInterface target = ChainlinkKeeperInterface(m_job.target);
+      (bool success,) = address(target).call{gas: m_job.executeGas}(abi.encodeWithSelector(target.execute.selector, m_job.executeData));
+      emit Executed(msg.sender, m_job.target, success);
     }
   }
 
@@ -178,7 +177,7 @@ contract Registry is IRegistry {
   function getPrimaryPaymentAmount(
     uint256 _gasLimit
   )
-    public
+    private
     view
     returns (uint256)
   {
@@ -191,7 +190,7 @@ contract Registry is IRegistry {
   function getSecondaryPaymentAmount(
     uint256 _payment
   )
-    public
+    private
     view
     returns (uint256)
   {
@@ -199,14 +198,15 @@ contract Registry is IRegistry {
   }
 
   function _validateQueryFunction(
-    address _target,
-    bytes4 _querySelector
+    address _target
   )
     internal
     view
     returns (bool)
   {
-    (bool success,) = _target.staticcall(abi.encodeWithSelector(_querySelector));
+    ChainlinkKeeperInterface target = ChainlinkKeeperInterface(_target);
+    bytes memory data;
+    (bool success,) = _target.staticcall(abi.encodeWithSelector(target.query.selector, data));
     return success;
   }
 }

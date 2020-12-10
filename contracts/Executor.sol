@@ -31,11 +31,14 @@ contract Executor {
     (success,, primaryPayment, secondaryPayment) = registry.queryJob();
   }
 
-  function execute()
+  function execute(
+    bytes calldata _
+  )
     external
   {
     (bool success, uint256 primaryPayment, uint256 secondaryPayment) = _canExecute();
     require(success, "!canExecute");
-    registry.executeJob(msg.sender, primaryPayment, secondaryPayment);
+    registry.executeJob(msg.sender);
   }
+
 }

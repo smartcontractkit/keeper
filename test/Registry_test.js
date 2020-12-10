@@ -1,6 +1,7 @@
 const Registry = artifacts.require('Registry')
 const Executor = artifacts.require('Executor')
 const Dummy = artifacts.require('Dummy')
+const Reverter = artifacts.require('Reverter')
 const { LinkToken } = require('@chainlink/contracts/truffle/v0.4/LinkToken')
 const { MockV2Aggregator } = require('@chainlink/contracts/truffle/v0.6/MockV2Aggregator')
 const { BN, constants, ether, expectEvent, expectRevert, time } = require('@openzeppelin/test-helpers')
@@ -12,8 +13,6 @@ contract('Registry', (accounts) => {
   const user3 = accounts[3]
   const linkEth = new BN('30000000000000000')
   const gasWei = new BN('100000000000')
-  const querySelector = '0x78b90337'
-  const executeSelector = '0x61461954'
   const executeGas = new BN('100000')
   const emptyBytes = '0x00'
   const rewardCallers = new BN('3')
@@ -31,6 +30,7 @@ contract('Registry', (accounts) => {
       { from: maintainer }
     )
     this.dummy = await Dummy.new()
+    this.reverter = await Reverter.new()
     await this.link.transfer(user1, ether('100'), { from: maintainer })
     await this.link.transfer(user2, ether('100'), { from: maintainer })
     await this.link.transfer(user3, ether('100'), { from: maintainer })
@@ -41,8 +41,6 @@ contract('Registry', (accounts) => {
       await expectRevert(
         this.registry.addJob(
           constants.ZERO_ADDRESS,
-          querySelector,
-          executeSelector,
           executeGas,
           rewardCallers,
           emptyBytes
@@ -55,8 +53,6 @@ contract('Registry', (accounts) => {
       await expectRevert(
         this.registry.addJob(
           this.dummy.address,
-          querySelector,
-          executeSelector,
           executeGas,
           0,
           emptyBytes
@@ -68,9 +64,7 @@ contract('Registry', (accounts) => {
     it('reverts if the query function is invalid', async () => {
       await expectRevert(
         this.registry.addJob(
-          this.dummy.address,
-          '0xabcdef01',
-          executeSelector,
+          this.reverter.address,
           executeGas,
           rewardCallers,
           emptyBytes
@@ -82,8 +76,6 @@ contract('Registry', (accounts) => {
     it('adds the job and creates an Executor contract', async () => {
       const { receipt } = await this.registry.addJob(
         this.dummy.address,
-        querySelector,
-        executeSelector,
         executeGas,
         rewardCallers,
         emptyBytes,
@@ -97,8 +89,6 @@ contract('Registry', (accounts) => {
       const executor = await Executor.at(executorAddr)
       assert.equal(this.registry.address, await executor.registry())
       const job = await this.registry.jobs(executorAddr)
-      assert.equal(querySelector, job.querySelector)
-      assert.equal(executeSelector, job.executeSelector)
       assert.equal(this.dummy.address, job.target)
       assert.equal(0, job.balance)
       assert.equal(receipt.blockNumber, job.lastExecuted)
@@ -113,8 +103,6 @@ contract('Registry', (accounts) => {
       await this.link.approve(this.registry.address, ether('100'), { from: user1 })
       const { receipt } = await this.registry.addJob(
         this.dummy.address,
-        querySelector,
-        executeSelector,
         executeGas,
         rewardCallers,
         emptyBytes,
