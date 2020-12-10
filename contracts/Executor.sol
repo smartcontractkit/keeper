@@ -1,9 +1,8 @@
 pragma solidity 0.6.12;
 
-import "./IExecutor.sol";
 import "./IRegistry.sol";
 
-contract Executor is IExecutor {
+contract Executor {
   IRegistry public immutable registry;
 
   constructor()
@@ -15,7 +14,6 @@ contract Executor is IExecutor {
   function canExecute()
     external
     view
-    override
     returns (bool success)
   {
     (success,,) = _canExecute();
@@ -35,7 +33,6 @@ contract Executor is IExecutor {
 
   function execute()
     external
-    override
   {
     (bool success, uint256 primaryPayment, uint256 secondaryPayment) = _canExecute();
     require(success, "!canExecute");
