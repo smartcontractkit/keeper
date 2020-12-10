@@ -5,11 +5,9 @@ import "@openzeppelin/contracts/math/SafeMath.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/Address.sol";
-import "./Executor.sol";
-import "./IRegistry.sol";
 import "./ChainlinkKeeperInterface.sol";
 
-contract Registry is IRegistry {
+contract Registry {
   using Address for address;
   using SafeERC20 for IERC20;
   using SafeMath for uint256;
@@ -34,19 +32,19 @@ contract Registry is IRegistry {
     mapping(uint256 => mapping(address => bool)) called;
   }
 
-  mapping(address => Job) public jobs;
+  Job[] public jobs;
 
   event AddJob(
-    address indexed executor,
+    uint256 indexed id,
     address target,
     uint32 executeGas
   );
   event AddedFunds(
-    address indexed executor,
+    uint256 indexed id,
     uint256 amount
   );
   event Executed(
-    address indexed executor,
+    uint256 indexed id,
     address indexed target,
     bool success
   );
@@ -75,28 +73,31 @@ contract Registry is IRegistry {
     require(_rewardCallers > 0, "!rewardCallers");
     require(_gasLimit > 23000, "!gasLimit");
     require(_validateQueryFunction(_target), "!query");
-    Executor executor = new Executor();
-    jobs[address(executor)] = Job({
+    //Executor executor = new Executor();
+
+    uint256 id = jobs.length;
+    jobs.push(Job({
       target: _target,
       executeGas: _gasLimit,
       rewardCallers: _rewardCallers,
       balance: 0,
       lastExecuted: uint64(block.number),
       executeData: _executeData
-    });
-    emit AddJob(address(executor), _target, _gasLimit);
+    }));
+    emit AddJob(id, _target, _gasLimit);
   }
 
-  function queryJob()
+  function queryJob(
+    uint256 id
+  )
     external
     view
-    override
     returns (
       bool canExecute
     )
   {
-    Job storage job = jobs[msg.sender];
-    (uint256 totalPayment,,) = getPaymentAmounts(msg.sender);
+    Job storage job = jobs[id];
+    (uint256 totalPayment,,) = getPaymentAmounts(id);
     if (job.balance >= totalPayment) {
       ChainlinkKeeperInterface target = ChainlinkKeeperInterface(job.target);
       bytes memory executeData = abi.encodeWithSelector(target.query.selector, job.executeData);
@@ -108,22 +109,24 @@ contract Registry is IRegistry {
   }
 
   function executeJob(
-    address _caller
+    uint256 id
   )
     external
-    override
   {
-    Job storage s_job = jobs[msg.sender];
+    require(jobs.length > id, "!job");
+
+    Job storage s_job = jobs[id];
     Job memory m_job = s_job;
     uint256 count = s_job.count[block.number];
 
     require(count <= m_job.rewardCallers, "!count");
-    require(!s_job.called[block.number][_caller], "called");
+    require(!s_job.called[block.number][msg.sender], "called");
 
-    (, uint256 _primaryPayment, uint256 _secondaryPayment) = getPaymentAmounts(msg.sender);
-    s_job.called[block.number][_caller] = true;
+    (, uint256 _primaryPayment,) = getPaymentAmounts(id);
+    s_job.called[block.number][msg.sender] = true;
+    require(m_job.balance >= _primaryPayment, "!executable");
     s_job.balance = uint96(uint256(m_job.balance).sub(_primaryPayment));
-    LINK.transfer(_caller, _primaryPayment);
+    LINK.transfer(msg.sender, _primaryPayment);
 
     s_job.count[block.number] = uint8(uint256(count).add(1));
     // ensure second+ callers are still supplying enough gas
@@ -132,24 +135,25 @@ contract Registry is IRegistry {
       s_job.lastExecuted = uint64(block.number);
       ChainlinkKeeperInterface target = ChainlinkKeeperInterface(m_job.target);
       (bool success,) = address(target).call{gas: m_job.executeGas}(abi.encodeWithSelector(target.execute.selector, m_job.executeData));
-      emit Executed(msg.sender, m_job.target, success);
+      emit Executed(id, m_job.target, success);
     }
   }
 
   function addFunds(
-    address _executor,
+    uint256 id,
     uint256 _amount
   )
     external
   {
-    require(jobs[_executor].rewardCallers > 0, "!job");
-    jobs[_executor].balance = uint96(uint256(jobs[_executor].balance).add(_amount));
+    require(jobs.length > id, "!job");
+
+    jobs[id].balance = uint96(uint256(jobs[id].balance).add(_amount));
     LINK.transferFrom(msg.sender, address(this), _amount);
-    emit AddedFunds(_executor, _amount);
+    emit AddedFunds(id, _amount);
   }
 
   function getPaymentAmounts(
-    address _executor
+    uint256 id
   )
     public
     view
@@ -159,8 +163,8 @@ contract Registry is IRegistry {
       uint256 secondaryPayment
     )
   {
-    uint256 gasLimit = uint256(jobs[_executor].executeGas);
-    uint256 callers = uint256(jobs[_executor].rewardCallers);
+    uint256 gasLimit = uint256(jobs[id].executeGas);
+    uint256 callers = uint256(jobs[id].rewardCallers);
     primaryPayment = getPrimaryPaymentAmount(gasLimit);
     secondaryPayment = getSecondaryPaymentAmount(primaryPayment);
     totalPayment = primaryPayment.add(secondaryPayment.mul(callers));
@@ -183,7 +187,7 @@ contract Registry is IRegistry {
     uint256 _payment
   )
     private
-    view
+    pure
     returns (uint256)
   {
     return _payment.div(100).mul(SECONDARY_CALLER_DISCOUNT_RATE);
