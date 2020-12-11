@@ -24,7 +24,7 @@ contract Registry {
     uint32 executeGas;
     uint64 lastExecuted;
     uint96 balance;
-    bytes executeData;
+    bytes queryData;
     // block.number => count
     mapping(uint256 => uint8) count;
     // block.number => caller => called
@@ -62,7 +62,7 @@ contract Registry {
   function addJob(
     address _target,
     uint32 _gasLimit,
-    bytes calldata _executeData
+    bytes calldata _queryData
   )
     external
   {
@@ -76,7 +76,7 @@ contract Registry {
       executeGas: _gasLimit,
       balance: 0,
       lastExecuted: uint64(block.number),
-      executeData: _executeData
+      queryData: _queryData
     }));
     emit AddJob(id, _gasLimit);
   }
@@ -94,8 +94,8 @@ contract Registry {
     (uint256 totalPayment,,) = getPaymentAmounts(id);
     if (job.balance >= totalPayment) {
       ChainlinkKeeperInterface target = ChainlinkKeeperInterface(job.target);
-      bytes memory executeData = abi.encodeWithSelector(target.query.selector, job.executeData);
-      (, bytes memory result) = job.target.staticcall(executeData);
+      bytes memory queryData = abi.encodeWithSelector(target.query.selector, job.queryData);
+      (, bytes memory result) = job.target.staticcall(queryData);
       ( canExecute ) = abi.decode(result, (bool));
     } else {
       canExecute = false;
@@ -127,7 +127,7 @@ contract Registry {
     if (count < 1) {
       s_job.lastExecuted = uint64(block.number);
       ChainlinkKeeperInterface target = ChainlinkKeeperInterface(m_job.target);
-      (bool success,) = address(target).call{gas: m_job.executeGas}(abi.encodeWithSelector(target.execute.selector, m_job.executeData));
+      (bool success,) = address(target).call{gas: m_job.executeGas}(abi.encodeWithSelector(target.execute.selector, m_job.queryData));
       emit Executed(id, m_job.target, success);
     }
   }

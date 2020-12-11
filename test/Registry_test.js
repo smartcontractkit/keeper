@@ -83,7 +83,7 @@ contract('Registry', (accounts) => {
       assert.equal(receipt.blockNumber, job.lastExecuted)
       assert.equal(dummy.address, job.target)
       assert.equal(0, job.balance)
-      assert.equal(emptyBytes, job.executeData)
+      assert.equal(emptyBytes, job.queryData)
     })
   })
 
