@@ -48,6 +48,11 @@ contract UpkeepRegistry is Owned {
     bool indexed success,
     bytes performData
   );
+  event WithdrewFunds(
+    uint256 indexed id,
+    uint256 amount,
+    address to
+  );
 
   constructor(
     address _link,
@@ -166,14 +171,28 @@ contract UpkeepRegistry is Owned {
 
   function addFunds(
     uint256 id,
-    uint256 _amount
+    uint256 amount
   )
     external
     validateRegistration(id)
   {
-    registrations[id].balance = uint96(uint256(registrations[id].balance).add(_amount));
-    LINK.transferFrom(msg.sender, address(this), _amount);
-    emit AddedFunds(id, _amount);
+    registrations[id].balance = uint96(uint256(registrations[id].balance).add(amount));
+    LINK.transferFrom(msg.sender, address(this), amount);
+    emit AddedFunds(id, amount);
+  }
+
+  function withdrawFunds(
+    uint256 id,
+    uint256 amount,
+    address to
+  )
+    external
+  {
+    require(registrations[id].admin == msg.sender, "only callable by admin");
+
+    registrations[id].balance = uint96(uint256(registrations[id].balance).sub(amount));
+    LINK.transfer(to, amount);
+    emit WithdrewFunds(id, amount, to);
   }
 
   function keepersFor(
@@ -204,15 +223,14 @@ contract UpkeepRegistry is Owned {
   }
 
   function validateQueryFunction(
-    address _target
+    address target
   )
     private
     view
     returns (bool)
   {
-    UpkeptInterface target = UpkeptInterface(_target);
     bytes memory data;
-    (bool success,) = _target.staticcall(abi.encodeWithSelector(CHECK_SELECTOR, data));
+    (bool success,) = target.staticcall(abi.encodeWithSelector(CHECK_SELECTOR, data));
     return success;
   }
 

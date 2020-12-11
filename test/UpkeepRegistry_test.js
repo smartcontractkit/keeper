@@ -12,6 +12,7 @@ contract('UpkeepRegistry', (accounts) => {
   const keeper3 = accounts[3]
   const nonkeeper = accounts[4]
   const admin = accounts[5]
+  const payee = accounts[6]
   const keepers = [keeper1, keeper2, keeper3]
   const linkEth = new BN('30000000000000000')
   const gasWei = new BN('100000000000')
@@ -309,6 +310,46 @@ contract('UpkeepRegistry', (accounts) => {
           'only keepers'
         )
       })
+    })
+  })
+
+  describe('#withdrawFunds', () => {
+    beforeEach(async () => {
+      await linkToken.approve(registry.address, ether('100'), { from: keeper1 })
+      await registry.addFunds(id, ether('1'), { from: keeper1 })
+    })
+
+    it('reverts if called by anyone but the admin', async () => {
+      await expectRevert(
+        registry.withdrawFunds(id + 1, ether('1'), payee, { from: owner }),
+        'only callable by admin'
+      )
+    })
+
+    it('reverts if called with more than available balance', async () => {
+      await expectRevert(
+        registry.withdrawFunds(id, ether('2'), payee, { from: admin }),
+        'SafeMath: subtraction overflow'
+      )
+    })
+
+    it('moves the funds out and updates the balance', async () => {
+      const payeeBefore = await linkToken.balanceOf(payee)
+      const registryBefore = await linkToken.balanceOf(registry.address)
+
+      let registration = await registry.registrations(id)
+      assert.isTrue(ether('1').eq(registration.balance))
+
+      await registry.withdrawFunds(id, ether('1'), payee, { from: admin })
+
+      const payeeAfter = await linkToken.balanceOf(payee)
+      const registryAfter = await linkToken.balanceOf(registry.address)
+
+      assert.isTrue(payeeBefore.add(ether('1')).eq(payeeAfter))
+      assert.isTrue(registryBefore.sub(ether('1')).eq(registryAfter))
+
+      registration = await registry.registrations(id)
+      assert.equal(0, registration.balance)
     })
   })
 })
