@@ -60,7 +60,7 @@ contract('UpkeepRegistry', (accounts) => {
           emptyBytes,
           { from: owner }
         ),
-        '!contract'
+        'target is not a contract'
       )
     })
 
@@ -88,7 +88,7 @@ contract('UpkeepRegistry', (accounts) => {
           emptyBytes,
           { from: owner }
         ),
-        '!contract'
+        'target is not a contract'
       )
     })
 

@@ -19,6 +19,7 @@ contract UpkeepRegistry is Owned {
   uint256 constant private LINK_DIVISIBILITY = 1e18;
   bytes4 constant private CHECK_SELECTOR = UpkeptInterface.checkForUpkeep.selector;
   bytes4 constant private PERFORM_SELECTOR = UpkeptInterface.performUpkeep.selector;
+  uint256 constant private CALL_GAS_MINIMUM = 2300;
   uint256 public registrationCount;
   mapping(uint256 => Registration) public registrations;
   mapping(address => KeeperRegistrations) private keeperRegistrations;
@@ -85,8 +86,8 @@ contract UpkeepRegistry is Owned {
     external
     onlyOwner()
   {
-    require(target.isContract(), "!contract");
-    require(gasLimit > 23000, "!gasLimit");
+    require(target.isContract(), "target is not a contract");
+    require(gasLimit > CALL_GAS_MINIMUM, "below minimum gas");
     require(keepers.length > 0, "minimum of 1 keeper");
 
     uint256 id = registrationCount;
@@ -260,6 +261,9 @@ contract UpkeepRegistry is Owned {
     uint256 gasLimit = uint256(registrations[id].executeGas);
     uint256 gasPrice = uint256(FASTGAS.latestAnswer());
     uint256 linkEthPrice = uint256(LINKETH.latestAnswer());
+    // Assuming that the total ETH supply is capped by 2**128 Wei, the maximum
+    // intermediate value here is on the order of 2**188 and will therefore
+    // always fit a uint256.
     uint256 base = gasPrice.mul(gasLimit).mul(LINK_DIVISIBILITY).div(linkEthPrice);
     return base.add(base.mul(25).div(100));
   }
