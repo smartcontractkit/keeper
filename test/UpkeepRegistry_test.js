@@ -18,6 +18,7 @@ contract('UpkeepRegistry', (accounts) => {
   const gasWei = new BN('100000000000')
   const executeGas = new BN('100000')
   const emptyBytes = '0x00'
+  const zeroAddress = constants.ZERO_ADDRESS
   const extraGas = new BN('250000')
   let linkToken, linkEthFeed, gasPriceFeed, registry, mock, id
 
@@ -53,7 +54,7 @@ contract('UpkeepRegistry', (accounts) => {
     it('reverts if the target is not a contract', async () => {
       await expectRevert(
         registry.registerUpkeep(
-          constants.ZERO_ADDRESS,
+          zeroAddress,
           executeGas,
           admin,
           keepers,
@@ -81,7 +82,7 @@ contract('UpkeepRegistry', (accounts) => {
     it('reverts if the target is not a contract', async () => {
       await expectRevert(
         registry.registerUpkeep(
-          constants.ZERO_ADDRESS,
+          zeroAddress,
           executeGas,
           admin,
           keepers,
@@ -171,7 +172,7 @@ contract('UpkeepRegistry', (accounts) => {
 
   describe('#checkForUpkeep', () => {
     it('returns false if the upkeep is not funded', async () => {
-      const check = await registry.checkForUpkeep.call(id)
+      const check = await registry.checkForUpkeep.call(id, {from: zeroAddress})
       assert.isFalse(check.canPerform)
     })
 
@@ -184,7 +185,7 @@ contract('UpkeepRegistry', (accounts) => {
       it('returns false if the target cannot execute', async () => {
         const mockResponse = await mock.checkForUpkeep.call("0x")
         assert.isFalse(mockResponse.callable)
-        const check = await registry.checkForUpkeep.call(id)
+        const check = await registry.checkForUpkeep.call(id, { from: zeroAddress })
         assert.isFalse(check.canPerform)
       })
 
@@ -192,18 +193,23 @@ contract('UpkeepRegistry', (accounts) => {
         await mock.setCanExecute(true)
         const mockResponse = await mock.checkForUpkeep.call("0x")
         assert.isTrue(mockResponse.callable)
-        const check = await registry.checkForUpkeep.call(id)
+        const check = await registry.checkForUpkeep.call(id, {from: zeroAddress})
         assert.isTrue(check.canPerform)
+      })
+
+      it('reverts if executed', async () => {
+        await mock.setCanExecute(true)
+        await expectRevert(
+          registry.checkForUpkeep(id),
+          'only for reading'
+        )
       })
     })
   })
 
   describe('#tryUpkeep', () => {
     it('returns false if the registration is not funded', async () => {
-      await expectRevert(
-        registry.tryUpkeep(keeper1, id, "0x"),
-        "!executable"
-      )
+      assert.isFalse(await registry.tryUpkeep.call(id, "0x00", { from: zeroAddress }))
     })
 
     context('when the registration is funded', () => {
@@ -213,26 +219,27 @@ contract('UpkeepRegistry', (accounts) => {
       })
 
       it('reverts if the target cannot execute', async () => {
-        await expectRevert(
-          registry.tryUpkeep.call(keeper1, id, "0x"),
-          'upkeep failed'
-        )
+        assert.isFalse(await registry.tryUpkeep.call(id, "0x00", { from: zeroAddress }))
       })
 
-      it('reverts if the sender is not a target', async () => {
-        await expectRevert(
-          registry.tryUpkeep.call(nonkeeper, id, "0x"),
-          'only keepers'
-        )
-      })
+      describe('when the target can execute', () => {
+        beforeEach(async () => {
+          await mock.setCanExecute(true)
+        })
 
-      it('returns true if the contract can execute', async () => {
-        await mock.setCanExecute(true)
-        assert.isTrue(await registry.tryUpkeep.call(keeper1, id, "0x"))
+        it('returns true if called', async () => {
+          assert.isTrue(await registry.tryUpkeep.call(id, "0x", {from: zeroAddress}))
+        })
+
+        it('reverts if executed', async () => {
+          await expectRevert(
+            registry.tryUpkeep(id, "0x"),
+            'only for reading'
+          )
+        })
       })
     })
   })
-
 
   describe('#performUpkeep', () => {
     it('reverts if the registration is not funded', async () => {

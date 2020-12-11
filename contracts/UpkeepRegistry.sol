@@ -132,7 +132,7 @@ contract UpkeepRegistry is Owned {
     uint256 id
   )
     external
-    view
+    cannotExecute()
     returns (
       bool canPerform,
       bytes memory performData
@@ -145,34 +145,34 @@ contract UpkeepRegistry is Owned {
     }
 
     bytes memory toCall = abi.encodeWithSelector(CHECK_SELECTOR, registration.checkData);
-    (bool success, bytes memory result) = registration.target.staticcall(toCall);
+    (bool success, bytes memory result) = registration.target.call(toCall);
     if (!success) {
       return (false, performData);
     }
-
     return abi.decode(result, (bool, bytes));
   }
 
   function tryUpkeep(
-    address sender,
     uint256 id,
     bytes calldata performData
   )
     external
+    cannotExecute()
     validateRegistration(id)
     returns (
       bool success
     )
   {
     Registration storage s_registration = registrations[id];
-    require(s_registration.isKeeper[sender], "only keepers");
-
     uint256 payment = getPaymentAmount(id);
-    require(s_registration.balance >= payment, "!executable");
+    if (s_registration.balance < payment) {
+      return false;
+    }
 
     bytes memory toCall = abi.encodeWithSelector(PERFORM_SELECTOR, performData);
     (success,) = s_registration.target.call{gas: s_registration.executeGas}(toCall);
-    require(success, "upkeep failed");
+
+    return success;
   }
 
   function performUpkeep(
@@ -272,6 +272,12 @@ contract UpkeepRegistry is Owned {
     uint256 id
   ) {
     require(registrations[id].valid, "invalid upkeep id");
+    _;
+  }
+
+  modifier cannotExecute()
+  {
+    require(msg.sender == address(0), "only for reading");
     _;
   }
 
