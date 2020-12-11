@@ -91,26 +91,27 @@ contract UpkeepRegistry {
     view
     returns (
       bool canPerform,
-      bytes memory performCalldata
+      bytes memory performData
     )
   {
     Upkeep storage upkeep = upkeeps[id];
     uint256 payment = getPaymentAmount(id);
     if (upkeep.balance < payment) {
-      return (false, performCalldata);
+      return (false, performData);
     }
 
     bytes memory toCall = abi.encodeWithSelector(CHECK_SELECTOR, upkeep.checkData);
     (bool success, bytes memory result) = upkeep.target.staticcall(toCall);
     if (!success) {
-      return (false, performCalldata);
+      return (false, performData);
     }
 
     return abi.decode(result, (bool, bytes));
   }
 
   function performUpkeep(
-    uint256 id
+    uint256 id,
+    bytes calldata peformData
   )
     external
   {
@@ -124,12 +125,11 @@ contract UpkeepRegistry {
     require(upkeep.balance >= payment, "!executable");
     s_upkeep.balance = uint96(uint256(upkeep.balance).sub(payment));
 
-    LINK.transfer(msg.sender, payment);
-
     require(gasleft() > upkeep.executeGas, "!gasleft");
-    bytes memory toCall = abi.encodeWithSelector(PERFORM_SELECTOR, upkeep.checkData);
+    bytes memory toCall = abi.encodeWithSelector(PERFORM_SELECTOR, peformData);
     (bool success,) = upkeep.target.call{gas: upkeep.executeGas}(toCall);
 
+    LINK.transfer(msg.sender, payment);
     emit UpkeepPerformed(id, upkeep.target, success);
   }
 

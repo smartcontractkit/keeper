@@ -3,10 +3,14 @@ pragma solidity 0.6.12;
 import '../UpkeptInterface.sol';
 
 contract UpkeptMock is UpkeptInterface {
-  bool internal _canExecute;
+  bool private canExecute;
 
-  function setCanExecute(bool _value) public {
-    _canExecute = _value;
+  event UpkeepPerformedWith(bytes upkeepData);
+
+  function setCanExecute(bool value)
+    public
+  {
+    canExecute = value;
   }
 
   function checkForUpkeep(bytes calldata data)
@@ -17,16 +21,20 @@ contract UpkeptMock is UpkeptInterface {
       bytes calldata executedata
     )
   {
-    return (_canExecute, data);
+    return (canExecute, data);
   }
 
   function performUpkeep(
-    bytes calldata
+    bytes calldata data
   )
     external
     override
   {
-    require(_canExecute, "Cannot execute");
+    require(canExecute, "Cannot execute");
+
     setCanExecute(false);
+
+    emit UpkeepPerformedWith(data);
   }
+
 }
