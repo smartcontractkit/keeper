@@ -1,11 +1,11 @@
-const Registry = artifacts.require('Registry')
+const UpkeepRegistry = artifacts.require('UpkeepRegistry')
 const Dummy = artifacts.require('Dummy')
 const Reverter = artifacts.require('Reverter')
 const { LinkToken } = require('@chainlink/contracts/truffle/v0.4/LinkToken')
 const { MockV2Aggregator } = require('@chainlink/contracts/truffle/v0.6/MockV2Aggregator')
 const { BN, constants, ether, expectEvent, expectRevert, time } = require('@openzeppelin/test-helpers')
 
-contract('Registry', (accounts) => {
+contract('UpkeepRegistry', (accounts) => {
   const maintainer = accounts[0]
   const user1 = accounts[1]
   const user2 = accounts[2]
@@ -23,7 +23,7 @@ contract('Registry', (accounts) => {
     linkToken = await LinkToken.new({ from: maintainer })
     gasPriceFeed = await MockV2Aggregator.new(gasWei, { from: maintainer })
     linkEthFeed = await MockV2Aggregator.new(linkEth, { from: maintainer })
-    registry = await Registry.new(
+    registry = await UpkeepRegistry.new(
       linkToken.address,
       linkEthFeed.address,
       gasPriceFeed.address,
@@ -120,7 +120,7 @@ contract('Registry', (accounts) => {
       })
 
       it('does not revert if the target cannot execute', async () => {
-        const dummyResponse = await dummy.query.call("0x")
+        const dummyResponse = await dummy.checkForUpkeep.call("0x")
         assert.isFalse(dummyResponse.callable)
 
         await registry.executeJob(jobId)
@@ -128,7 +128,7 @@ contract('Registry', (accounts) => {
 
       it('reverts if not enough gas supplied', async () => {
         await dummy.setCanExecute(true)
-        const dummyResponse = await dummy.query.call("0x")
+        const dummyResponse = await dummy.checkForUpkeep.call("0x")
         assert.isTrue(dummyResponse.callable)
         await expectRevert(
           registry.executeJob(jobId, { from: user1, gas: new BN('120000') }),
@@ -138,17 +138,17 @@ contract('Registry', (accounts) => {
 
       it('executes always for the first caller if the target can execute', async () => {
         await dummy.setCanExecute(true)
-        let dummyResponse = await dummy.query.call("0x")
+        let dummyResponse = await dummy.checkForUpkeep.call("0x")
         assert.isTrue(dummyResponse.callable)
         const balanceBefore = await linkToken.balanceOf(user1)
         const tx = await registry.executeJob(jobId, { from: user1, gas: extraGas })
         const balanceAfter = await linkToken.balanceOf(user1)
         assert.isTrue(balanceAfter.gt(balanceBefore))
-        await expectEvent.inTransaction(tx.tx, Registry, 'Executed', {
+        await expectEvent.inTransaction(tx.tx, UpkeepRegistry, 'Executed', {
           target: dummy.address,
           success: true
         })
-        dummyResponse = await dummy.query.call("0x")
+        dummyResponse = await dummy.checkForUpkeep.call("0x")
         assert.isFalse(dummyResponse.callable)
       })
 
@@ -183,14 +183,14 @@ contract('Registry', (accounts) => {
       })
 
       it('returns false if the target cannot execute', async () => {
-        const dummyResponse = await dummy.query.call("0x")
+        const dummyResponse = await dummy.checkForUpkeep.call("0x")
         assert.isFalse(dummyResponse.callable)
         assert.isFalse(await registry.queryJob.call(jobId))
       })
 
       it('returns true if the target can execute', async () => {
         await dummy.setCanExecute(true)
-        const dummyResponse = await dummy.query.call("0x")
+        const dummyResponse = await dummy.checkForUpkeep.call("0x")
         assert.isTrue(dummyResponse.callable)
         assert.isTrue(await registry.queryJob.call(jobId))
       })

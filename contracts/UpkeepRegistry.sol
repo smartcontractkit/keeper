@@ -4,9 +4,11 @@ import "@chainlink/contracts/src/v0.6/interfaces/AggregatorInterface.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
-import "./ChainlinkKeeperInterface.sol";
+import "@openzeppelin/contracts/utils/Address.sol";
+import "./UpkeptInterface.sol";
 
-contract Registry {
+contract UpkeepRegistry {
+  using Address for address;
   using SafeERC20 for IERC20;
   using SafeMath for uint256;
 
@@ -89,8 +91,8 @@ contract Registry {
     Job storage job = jobs[id];
     (uint256 totalPayment,,) = getPaymentAmounts(id);
     if (job.balance >= totalPayment) {
-      ChainlinkKeeperInterface target = ChainlinkKeeperInterface(job.target);
-      bytes memory queryData = abi.encodeWithSelector(target.query.selector, job.queryData);
+      UpkeptInterface target = UpkeptInterface(job.target);
+      bytes memory queryData = abi.encodeWithSelector(target.checkForUpkeep.selector, job.queryData);
       (, bytes memory result) = job.target.staticcall(queryData);
       ( canExecute ) = abi.decode(result, (bool));
     } else {
@@ -121,8 +123,8 @@ contract Registry {
 
     require(gasleft() > m_job.executeGas, "!gasleft");
     if (count < 1) {
-      ChainlinkKeeperInterface target = ChainlinkKeeperInterface(m_job.target);
-      (bool success,) = address(target).call{gas: m_job.executeGas}(abi.encodeWithSelector(target.execute.selector, m_job.queryData));
+      UpkeptInterface target = UpkeptInterface(m_job.target);
+      (bool success,) = address(target).call{gas: m_job.executeGas}(abi.encodeWithSelector(target.performUpkeep.selector, m_job.queryData));
       emit Executed(id, m_job.target, success);
     }
   }
@@ -187,9 +189,9 @@ contract Registry {
     view
     returns (bool)
   {
-    ChainlinkKeeperInterface target = ChainlinkKeeperInterface(_target);
+    UpkeptInterface target = UpkeptInterface(_target);
     bytes memory data;
-    (bool success,) = _target.staticcall(abi.encodeWithSelector(target.query.selector, data));
+    (bool success,) = _target.staticcall(abi.encodeWithSelector(target.checkForUpkeep.selector, data));
     return success;
   }
 }

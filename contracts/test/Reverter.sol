@@ -1,10 +1,10 @@
 pragma solidity 0.6.12;
 
-import '../ChainlinkKeeperInterface.sol';
+import '../UpkeptInterface.sol';
 
-contract Reverter is ChainlinkKeeperInterface {
+contract Reverter is UpkeptInterface {
 
-  function query(bytes calldata data)
+  function checkForUpkeep(bytes calldata data)
     public
     view
     override
@@ -17,7 +17,7 @@ contract Reverter is ChainlinkKeeperInterface {
     return (true, data);
   }
 
-  function execute(
+  function performUpkeep(
     bytes calldata
   )
     external

@@ -1,15 +1,15 @@
 pragma solidity 0.6.12;
 
-import '../ChainlinkKeeperInterface.sol';
+import '../UpkeptInterface.sol';
 
-contract Dummy is ChainlinkKeeperInterface {
+contract Dummy is UpkeptInterface {
   bool internal _canExecute;
 
   function setCanExecute(bool _value) public {
     _canExecute = _value;
   }
 
-  function query(bytes calldata data)
+  function checkForUpkeep(bytes calldata data)
     public
     view
     override
@@ -21,7 +21,7 @@ contract Dummy is ChainlinkKeeperInterface {
     return (_canExecute, data);
   }
 
-  function execute(
+  function performUpkeep(
     bytes calldata
   )
     external
