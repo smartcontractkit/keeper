@@ -21,8 +21,8 @@ contract UpkeepRegistry is Owned {
   bytes4 constant private PERFORM_SELECTOR = UpkeptInterface.performUpkeep.selector;
   uint256 constant private CALL_GAS_MINIMUM = 2300;
   uint256 public registrationCount;
+  uint256[] private s_deregistered;
   mapping(uint256 => Registration) public registrations;
-  mapping(address => KeeperRegistrations) private keeperRegistrations;
 
   struct Registration {
     address target;
@@ -33,11 +33,6 @@ contract UpkeepRegistry is Owned {
     bytes checkData;
     address[] keepers;
     mapping(address => bool) isKeeper;
-  }
-
-  struct KeeperRegistrations {
-    uint256[] added;
-    uint256[] removed;
   }
 
   event UpkeepRegistered(
@@ -105,7 +100,6 @@ contract UpkeepRegistry is Owned {
     for (uint256 i = 0; i < keepers.length; i++) {
       address keeper = keepers[i];
       registrations[id].isKeeper[keeper] = true;
-      keeperRegistrations[keeper].added.push(id);
     }
     emit UpkeepRegistered(id, gasLimit, admin, keepers);
   }
@@ -122,8 +116,8 @@ contract UpkeepRegistry is Owned {
     address[] memory keepers = registrations[id].keepers;
     for (uint256 i = 0; i < keepers.length; i++) {
       address keeper = keepers[i];
-      keeperRegistrations[keeper].removed.push(id);
     }
+    s_deregistered.push(id);
 
     emit UpkeepDeregistered(id);
   }
@@ -236,18 +230,16 @@ contract UpkeepRegistry is Owned {
     return registrations[id].keepers;
   }
 
-  function registrationsFor(
-    address keeper
-  )
+  function deregistered()
     external
+    view
     returns (
-      uint256[] memory added,
-      uint256[] memory removed
+      uint256[] memory
     )
   {
-    KeeperRegistrations memory krs = keeperRegistrations[keeper];
-    return (krs.added, krs.removed);
+    return s_deregistered;
   }
+
 
   function getPaymentAmount(
     uint256 id

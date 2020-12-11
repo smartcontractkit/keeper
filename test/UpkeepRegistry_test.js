@@ -130,25 +130,6 @@ contract('UpkeepRegistry', (accounts) => {
       assert.isTrue(registration.valid)
       assert.deepEqual(keepers, await registry.keepersFor(id))
     })
-
-    it('updates the keeperRegistraions records', async () => {
-      let registrations = await registry.registrationsFor.call(keeper1)
-      assert.deepEqual([id], registrations.added)
-      assert.deepEqual([], registrations.removed)
-      const oldId = id
-      const { receipt } = await registry.registerUpkeep(
-        mock.address,
-        executeGas,
-        admin,
-        keepers,
-        emptyBytes,
-        { from: owner }
-      )
-      id = receipt.logs[0].args.id
-      registrations = await registry.registrationsFor.call(keeper1)
-      assert.deepEqual([oldId, id], registrations.added)
-      assert.deepEqual([], registrations.removed)
-    })
   })
 
   describe('#addFunds', () => {
@@ -405,15 +386,13 @@ contract('UpkeepRegistry', (accounts) => {
     })
 
     it('updates the keeperRegistraions records', async () => {
-      let registrations = await registry.registrationsFor.call(keeper1)
-      assert.deepEqual([id], registrations.added)
-      assert.deepEqual([], registrations.removed)
+      let deregistered = await registry.deregistered.call()
+      assert.deepEqual([], deregistered)
 
       await registry.deregisterUpkeep(id)
 
-      registrations = await registry.registrationsFor.call(keeper1)
-      assert.deepEqual([id], registrations.added)
-      assert.deepEqual([id], registrations.removed)
+      deregistered = await registry.deregistered.call()
+      assert.deepEqual([id], deregistered)
     })
   })
 })
