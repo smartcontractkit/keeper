@@ -92,21 +92,6 @@ contract('UpkeepRegistry', (accounts) => {
       )
     })
 
-    it('reverts if the query function is invalid', async () => {
-      const reverter = await UpkeptReverter.new()
-      await expectRevert(
-        registry.registerUpkeep(
-          reverter.address,
-          executeGas,
-          admin,
-          keepers,
-          emptyBytes,
-          { from: owner }
-        ),
-        '!query'
-      )
-    })
-
     it('reverts if called by a non-owner', async () => {
       const reverter = await UpkeptReverter.new()
       await expectRevert(

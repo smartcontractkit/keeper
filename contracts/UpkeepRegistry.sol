@@ -88,7 +88,6 @@ contract UpkeepRegistry is Owned {
     require(target.isContract(), "!contract");
     require(gasLimit > 23000, "!gasLimit");
     require(keepers.length > 0, "minimum of 1 keeper");
-    require(validateQueryFunction(target), "!query");
 
     uint256 id = registrationCount;
     registrations[id] = Registration({
@@ -263,18 +262,6 @@ contract UpkeepRegistry is Owned {
     uint256 linkEthPrice = uint256(LINKETH.latestAnswer());
     uint256 base = gasPrice.mul(gasLimit).mul(LINK_DIVISIBILITY).div(linkEthPrice);
     return base.add(base.mul(25).div(100));
-  }
-
-  function validateQueryFunction(
-    address target
-  )
-    private
-    view
-    returns (bool)
-  {
-    bytes memory data;
-    (bool success,) = target.staticcall(abi.encodeWithSelector(CHECK_SELECTOR, data));
-    return success;
   }
 
   modifier validateRegistration(
