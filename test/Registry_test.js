@@ -80,7 +80,6 @@ contract('Registry', (accounts) => {
         executeGas: executeGas
       })
       const job = await registry.jobs(jobId)
-      assert.equal(receipt.blockNumber, job.lastExecuted)
       assert.equal(dummy.address, job.target)
       assert.equal(0, job.balance)
       assert.equal(emptyBytes, job.queryData)
@@ -151,9 +150,6 @@ contract('Registry', (accounts) => {
         })
         dummyResponse = await dummy.query.call("0x")
         assert.isFalse(dummyResponse.callable)
-        const block = await web3.eth.getBlockNumber()
-        const job = await registry.jobs(jobId)
-        assert.equal(block, job.lastExecuted)
       })
 
       it('pays the caller even if the target function fails', async () => {

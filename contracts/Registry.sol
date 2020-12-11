@@ -4,11 +4,9 @@ import "@chainlink/contracts/src/v0.6/interfaces/AggregatorInterface.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
-import "@openzeppelin/contracts/utils/Address.sol";
 import "./ChainlinkKeeperInterface.sol";
 
 contract Registry {
-  using Address for address;
   using SafeERC20 for IERC20;
   using SafeMath for uint256;
 
@@ -22,7 +20,6 @@ contract Registry {
   struct Job {
     address target;
     uint32 executeGas;
-    uint64 lastExecuted;
     uint96 balance;
     bytes queryData;
     // block.number => count
@@ -75,7 +72,6 @@ contract Registry {
       target: _target,
       executeGas: _gasLimit,
       balance: 0,
-      lastExecuted: uint64(block.number),
       queryData: _queryData
     }));
     emit AddJob(id, _gasLimit);
@@ -122,10 +118,9 @@ contract Registry {
     LINK.transfer(msg.sender, _primaryPayment);
 
     s_job.count[block.number] = uint8(uint256(count).add(1));
-    // ensure second+ callers are still supplying enough gas
+
     require(gasleft() > m_job.executeGas, "!gasleft");
     if (count < 1) {
-      s_job.lastExecuted = uint64(block.number);
       ChainlinkKeeperInterface target = ChainlinkKeeperInterface(m_job.target);
       (bool success,) = address(target).call{gas: m_job.executeGas}(abi.encodeWithSelector(target.execute.selector, m_job.queryData));
       emit Executed(id, m_job.target, success);
