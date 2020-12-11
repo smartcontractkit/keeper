@@ -6,7 +6,7 @@ const { MockV2Aggregator } = require('@chainlink/contracts/truffle/v0.6/MockV2Ag
 const { BN, constants, ether, expectEvent, expectRevert, time } = require('@openzeppelin/test-helpers')
 
 contract('UpkeepRegistry', (accounts) => {
-  const maintainer = accounts[0]
+  const owner = accounts[0]
   const keeper1 = accounts[1]
   const keeper2 = accounts[2]
   const keeper3 = accounts[3]
@@ -22,26 +22,26 @@ contract('UpkeepRegistry', (accounts) => {
   beforeEach(async () => {
     LinkToken.setProvider(web3.currentProvider)
     MockV2Aggregator.setProvider(web3.currentProvider)
-    linkToken = await LinkToken.new({ from: maintainer })
-    gasPriceFeed = await MockV2Aggregator.new(gasWei, { from: maintainer })
-    linkEthFeed = await MockV2Aggregator.new(linkEth, { from: maintainer })
+    linkToken = await LinkToken.new({ from: owner })
+    gasPriceFeed = await MockV2Aggregator.new(gasWei, { from: owner })
+    linkEthFeed = await MockV2Aggregator.new(linkEth, { from: owner })
     registry = await UpkeepRegistry.new(
       linkToken.address,
       linkEthFeed.address,
       gasPriceFeed.address,
-      { from: maintainer }
+      { from: owner }
     )
     mock = await UpkeptMock.new()
-    await linkToken.transfer(keeper1, ether('100'), { from: maintainer })
-    await linkToken.transfer(keeper2, ether('100'), { from: maintainer })
-    await linkToken.transfer(keeper3, ether('100'), { from: maintainer })
+    await linkToken.transfer(keeper1, ether('100'), { from: owner })
+    await linkToken.transfer(keeper2, ether('100'), { from: owner })
+    await linkToken.transfer(keeper3, ether('100'), { from: owner })
 
     const { receipt } = await registry.registerUpkeep(
       mock.address,
       executeGas,
       keepers,
       emptyBytes,
-      { from: keeper1 }
+      { from: owner }
     )
     upkeepId = receipt.logs[0].args.id
   })
@@ -53,7 +53,8 @@ contract('UpkeepRegistry', (accounts) => {
           constants.ZERO_ADDRESS,
           executeGas,
           keepers,
-          emptyBytes
+          emptyBytes,
+          { from: owner }
         ),
         '!contract'
       )
@@ -65,7 +66,8 @@ contract('UpkeepRegistry', (accounts) => {
           mock.address,
           executeGas,
           [],
-          emptyBytes
+          emptyBytes,
+          { from: owner }
         ),
         'minimum of 1 keeper'
       )
@@ -77,7 +79,8 @@ contract('UpkeepRegistry', (accounts) => {
           constants.ZERO_ADDRESS,
           executeGas,
           keepers,
-          emptyBytes
+          emptyBytes,
+          { from: owner }
         ),
         '!contract'
       )
@@ -90,9 +93,24 @@ contract('UpkeepRegistry', (accounts) => {
           reverter.address,
           executeGas,
           keepers,
-          emptyBytes
+          emptyBytes,
+          { from: owner }
         ),
         '!query'
+      )
+    })
+
+    it('reverts if called by a non-owner', async () => {
+      const reverter = await UpkeptReverter.new()
+      await expectRevert(
+        registry.registerUpkeep(
+          reverter.address,
+          executeGas,
+          keepers,
+          emptyBytes,
+          { from: keeper1 }
+        ),
+        'Only callable by owner'
       )
     })
 
@@ -102,7 +120,7 @@ contract('UpkeepRegistry', (accounts) => {
         executeGas,
         keepers,
         emptyBytes,
-        { from: keeper1 }
+        { from: owner }
       )
       upkeepId = receipt.logs[0].args.id
       expectEvent(receipt, 'UpkeepRegistered', {
@@ -176,8 +194,8 @@ contract('UpkeepRegistry', (accounts) => {
 
     context('when the upkeep is funded', () => {
       beforeEach(async () => {
-        await linkToken.approve(registry.address, ether('100'), { from: maintainer })
-        await registry.addFunds(upkeepId, ether('100'), { from: maintainer })
+        await linkToken.approve(registry.address, ether('100'), { from: owner })
+        await registry.addFunds(upkeepId, ether('100'), { from: owner })
       })
 
       it('reverts if the target cannot execute', async () => {
@@ -212,8 +230,8 @@ contract('UpkeepRegistry', (accounts) => {
 
     context('when the upkeep is funded', () => {
       beforeEach(async () => {
-        await linkToken.approve(registry.address, ether('100'), { from: maintainer })
-        await registry.addFunds(upkeepId, ether('100'), { from: maintainer })
+        await linkToken.approve(registry.address, ether('100'), { from: owner })
+        await registry.addFunds(upkeepId, ether('100'), { from: owner })
       })
 
       it('does not revert if the target cannot execute', async () => {
@@ -264,11 +282,11 @@ contract('UpkeepRegistry', (accounts) => {
           executeGas,
           keepers,
           emptyBytes,
-          { from: keeper1 }
+          { from: owner }
         )
         const upkeepId = receipt.logs[0].args.id
-        await linkToken.approve(registry.address, ether('100'), { from: maintainer })
-        await registry.addFunds(upkeepId, ether('100'), { from: maintainer })
+        await linkToken.approve(registry.address, ether('100'), { from: owner })
+        await registry.addFunds(upkeepId, ether('100'), { from: owner })
         await mock.setCanExecute(true)
         const balanceBefore = await linkToken.balanceOf(keeper1)
         const tx = await registry.performUpkeep(upkeepId, "0x", { from: keeper1 })

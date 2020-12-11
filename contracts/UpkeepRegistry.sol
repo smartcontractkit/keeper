@@ -1,13 +1,14 @@
 pragma solidity 0.6.12;
 
 import "@chainlink/contracts/src/v0.6/interfaces/AggregatorInterface.sol";
+import "@chainlink/contracts/src/v0.6/Owned.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/Address.sol";
 import "./UpkeptInterface.sol";
 
-contract UpkeepRegistry {
+contract UpkeepRegistry is Owned {
   using Address for address;
   using SafeERC20 for IERC20;
   using SafeMath for uint256;
@@ -64,6 +65,7 @@ contract UpkeepRegistry {
     bytes calldata _queryData
   )
     external
+    onlyOwner()
   {
     require(_target.isContract(), "!contract");
     require(_gasLimit > 23000, "!gasLimit");
