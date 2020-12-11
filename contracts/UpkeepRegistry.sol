@@ -16,12 +16,14 @@ contract UpkeepRegistry {
   AggregatorInterface public immutable LINKETH;
   AggregatorInterface public immutable FASTGAS;
   uint256 constant private LINK_DIVISIBILITY = 1e18;
+  bytes4 constant private CHECK_SELECTOR = UpkeptInterface.checkForUpkeep.selector;
+  bytes4 constant private PERFORM_SELECTOR = UpkeptInterface.performUpkeep.selector;
 
   struct Upkeep {
     address target;
     uint32 executeGas;
     uint96 balance;
-    bytes queryData;
+    bytes checkData;
     address[] keepers;
     mapping(address => bool) isKeeper;
   }
@@ -74,7 +76,7 @@ contract UpkeepRegistry {
       executeGas: _gasLimit,
       balance: 0,
       keepers: keepers,
-      queryData: _queryData
+      checkData: _queryData
     }));
     for (uint256 i = 0; i<keepers.length; i++) {
       upkeeps[id].isKeeper[keepers[i]] = true;
@@ -98,12 +100,12 @@ contract UpkeepRegistry {
       return (false, performCalldata);
     }
 
-    UpkeptInterface target = UpkeptInterface(upkeep.target);
-    bytes memory queryData = abi.encodeWithSelector(target.checkForUpkeep.selector, upkeep.queryData);
-    (bool success, bytes memory result) = address(target).staticcall(queryData);
+    bytes memory toCall = abi.encodeWithSelector(CHECK_SELECTOR, upkeep.checkData);
+    (bool success, bytes memory result) = upkeep.target.staticcall(toCall);
     if (!success) {
       return (false, performCalldata);
     }
+
     return abi.decode(result, (bool, bytes));
   }
 
@@ -115,20 +117,20 @@ contract UpkeepRegistry {
     require(upkeeps.length > id, "!upkeep");
 
     Upkeep storage s_upkeep = upkeeps[id];
-    Upkeep memory m_upkeep = s_upkeep;
+    Upkeep memory upkeep = s_upkeep;
     require(s_upkeep.isKeeper[msg.sender], "only keepers");
 
     uint256 payment = getPaymentAmount(id);
-    require(m_upkeep.balance >= payment, "!executable");
-    s_upkeep.balance = uint96(uint256(m_upkeep.balance).sub(payment));
+    require(upkeep.balance >= payment, "!executable");
+    s_upkeep.balance = uint96(uint256(upkeep.balance).sub(payment));
 
     LINK.transfer(msg.sender, payment);
 
-    require(gasleft() > m_upkeep.executeGas, "!gasleft");
-    UpkeptInterface target = UpkeptInterface(m_upkeep.target);
-    (bool success,) = address(target).call{gas: m_upkeep.executeGas}(abi.encodeWithSelector(target.performUpkeep.selector, m_upkeep.queryData));
+    require(gasleft() > upkeep.executeGas, "!gasleft");
+    bytes memory toCall = abi.encodeWithSelector(PERFORM_SELECTOR, upkeep.checkData);
+    (bool success,) = upkeep.target.call{gas: upkeep.executeGas}(toCall);
 
-    emit UpkeepPerformed(id, m_upkeep.target, success);
+    emit UpkeepPerformed(id, upkeep.target, success);
   }
 
   function addFunds(
@@ -183,4 +185,5 @@ contract UpkeepRegistry {
     (bool success,) = _target.staticcall(abi.encodeWithSelector(target.checkForUpkeep.selector, data));
     return success;
   }
+
 }

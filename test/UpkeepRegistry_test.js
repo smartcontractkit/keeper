@@ -113,7 +113,7 @@ contract('UpkeepRegistry', (accounts) => {
       const upkeep = await registry.upkeeps(upkeepId)
       assert.equal(mock.address, upkeep.target)
       assert.equal(0, upkeep.balance)
-      assert.equal(emptyBytes, upkeep.queryData)
+      assert.equal(emptyBytes, upkeep.checkData)
       assert.deepEqual(keepers, await registry.keepersFor(upkeepId))
     })
   })
