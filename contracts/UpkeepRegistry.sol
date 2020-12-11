@@ -12,9 +12,6 @@ contract UpkeepRegistry {
   using SafeERC20 for IERC20;
   using SafeMath for uint256;
 
-  uint256 public constant PRIMARY_CALLER_ADDITIONAL_RATE = 25;
-  uint256 public constant SECONDARY_CALLER_DISCOUNT_RATE = 80;
-
   IERC20 public immutable LINK;
   AggregatorInterface public immutable LINKETH;
   AggregatorInterface public immutable FASTGAS;
@@ -24,10 +21,6 @@ contract UpkeepRegistry {
     uint32 executeGas;
     uint96 balance;
     bytes queryData;
-    // block.number => count
-    mapping(uint256 => uint8) count;
-    // block.number => caller => called
-    mapping(uint256 => mapping(address => bool)) called;
   }
 
   Job[] public jobs;
@@ -89,7 +82,7 @@ contract UpkeepRegistry {
     )
   {
     Job storage job = jobs[id];
-    (uint256 totalPayment,,) = getPaymentAmounts(id);
+    (uint256 totalPayment,) = getPaymentAmounts(id);
     if (job.balance >= totalPayment) {
       UpkeptInterface target = UpkeptInterface(job.target);
       bytes memory queryData = abi.encodeWithSelector(target.checkForUpkeep.selector, job.queryData);
@@ -109,24 +102,17 @@ contract UpkeepRegistry {
 
     Job storage s_job = jobs[id];
     Job memory m_job = s_job;
-    uint256 count = s_job.count[block.number];
 
-    require(!s_job.called[block.number][msg.sender], "called");
-
-    (, uint256 _primaryPayment,) = getPaymentAmounts(id);
-    s_job.called[block.number][msg.sender] = true;
+    (, uint256 _primaryPayment) = getPaymentAmounts(id);
     require(m_job.balance >= _primaryPayment, "!executable");
     s_job.balance = uint96(uint256(m_job.balance).sub(_primaryPayment));
     LINK.transfer(msg.sender, _primaryPayment);
 
-    s_job.count[block.number] = uint8(uint256(count).add(1));
-
     require(gasleft() > m_job.executeGas, "!gasleft");
-    if (count < 1) {
-      UpkeptInterface target = UpkeptInterface(m_job.target);
-      (bool success,) = address(target).call{gas: m_job.executeGas}(abi.encodeWithSelector(target.performUpkeep.selector, m_job.queryData));
-      emit Executed(id, m_job.target, success);
-    }
+
+    UpkeptInterface target = UpkeptInterface(m_job.target);
+    (bool success,) = address(target).call{gas: m_job.executeGas}(abi.encodeWithSelector(target.performUpkeep.selector, m_job.queryData));
+    emit Executed(id, m_job.target, success);
   }
 
   function addFunds(
@@ -149,17 +135,15 @@ contract UpkeepRegistry {
     view
     returns (
       uint256 totalPayment,
-      uint256 primaryPayment,
-      uint256 secondaryPayment
+      uint256 primaryPayment
     )
   {
     uint256 gasLimit = uint256(jobs[id].executeGas);
-    primaryPayment = getPrimaryPaymentAmount(gasLimit);
-    secondaryPayment = getSecondaryPaymentAmount(primaryPayment);
-    totalPayment = primaryPayment.add(secondaryPayment.mul(1)); // FIXME
+    primaryPayment = getIndividualPaymentAmount(gasLimit);
+    totalPayment = primaryPayment.add(primaryPayment);
   }
 
-  function getPrimaryPaymentAmount(
+  function getIndividualPaymentAmount(
     uint256 _gasLimit
   )
     private
@@ -169,17 +153,7 @@ contract UpkeepRegistry {
     uint256 gasPrice = uint256(FASTGAS.latestAnswer());
     uint256 linkEthPrice = uint256(LINKETH.latestAnswer());
     uint256 payment = gasPrice.mul(_gasLimit).mul(1e18).div(linkEthPrice);
-    return payment.add(payment.div(100).mul(PRIMARY_CALLER_ADDITIONAL_RATE));
-  }
-
-  function getSecondaryPaymentAmount(
-    uint256 _payment
-  )
-    private
-    pure
-    returns (uint256)
-  {
-    return _payment.div(100).mul(SECONDARY_CALLER_DISCOUNT_RATE);
+    return payment;
   }
 
   function _validateQueryFunction(
