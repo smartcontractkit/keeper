@@ -11,7 +11,6 @@ contract Dummy is UpkeptInterface {
 
   function checkForUpkeep(bytes calldata data)
     public
-    view
     override
     returns (
       bool callable,

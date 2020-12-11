@@ -100,7 +100,7 @@ contract UpkeepRegistry {
 
     UpkeptInterface target = UpkeptInterface(upkeep.target);
     bytes memory queryData = abi.encodeWithSelector(target.checkForUpkeep.selector, upkeep.queryData);
-    (bool success, bytes memory result) = upkeep.target.staticcall(queryData);
+    (bool success, bytes memory result) = address(target).staticcall(queryData);
     if (!success) {
       return (false, performCalldata);
     }
