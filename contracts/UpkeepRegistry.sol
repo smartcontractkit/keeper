@@ -64,15 +64,15 @@ contract UpkeepRegistry is Owned {
   );
 
   constructor(
-    address _link,
-    address _linkEth,
-    address _fastGas
+    address link,
+    address linkEth,
+    address fastGas
   )
     public
   {
-    LINK = IERC20(_link);
-    LINKETH = AggregatorInterface(_linkEth);
-    FASTGAS = AggregatorInterface(_fastGas);
+    LINK = IERC20(link);
+    LINKETH = AggregatorInterface(linkEth);
+    FASTGAS = AggregatorInterface(fastGas);
   }
 
   function registerUpkeep(
@@ -261,7 +261,8 @@ contract UpkeepRegistry is Owned {
     uint256 gasLimit = uint256(registrations[id].executeGas);
     uint256 gasPrice = uint256(FASTGAS.latestAnswer());
     uint256 linkEthPrice = uint256(LINKETH.latestAnswer());
-    return gasPrice.mul(gasLimit).mul(LINK_DIVISIBILITY).div(linkEthPrice);
+    uint256 base = gasPrice.mul(gasLimit).mul(LINK_DIVISIBILITY).div(linkEthPrice);
+    return base.add(base.mul(25).div(100));
   }
 
   function validateQueryFunction(
