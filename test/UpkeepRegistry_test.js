@@ -213,7 +213,8 @@ contract('UpkeepRegistry', (accounts) => {
 
   describe('#checkForUpkeep', () => {
     it('returns false if the upkeep is not funded', async () => {
-      assert.isFalse(await registry.checkForUpkeep.call(upkeepId))
+      const check = await registry.checkForUpkeep.call(upkeepId)
+      assert.isFalse(check.canPerform)
     })
 
     context('when the upkeep is funded', () => {
@@ -225,14 +226,16 @@ contract('UpkeepRegistry', (accounts) => {
       it('returns false if the target cannot execute', async () => {
         const dummyResponse = await dummy.checkForUpkeep.call("0x")
         assert.isFalse(dummyResponse.callable)
-        assert.isFalse(await registry.checkForUpkeep.call(upkeepId))
+        const check = await registry.checkForUpkeep.call(upkeepId)
+        assert.isFalse(check.canPerform)
       })
 
       it('returns true if the target can execute', async () => {
         await dummy.setCanExecute(true)
         const dummyResponse = await dummy.checkForUpkeep.call("0x")
         assert.isTrue(dummyResponse.callable)
-        assert.isTrue(await registry.checkForUpkeep.call(upkeepId))
+        const check = await registry.checkForUpkeep.call(upkeepId)
+        assert.isTrue(check.canPerform)
       })
     })
   })

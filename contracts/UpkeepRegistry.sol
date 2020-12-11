@@ -82,39 +82,29 @@ contract UpkeepRegistry {
     emit UpkeepRegistered(id, _gasLimit, keepers);
   }
 
-  function keepersFor(
-    uint256 id
-  )
-    external
-    view
-    returns (
-      address[] memory
-    )
-  {
-    return upkeeps[id].keepers;
-  }
-
   function checkForUpkeep(
     uint256 id
   )
     external
     view
     returns (
-      bool canPerform
+      bool canPerform,
+      bytes memory performCalldata
     )
   {
     Upkeep storage upkeep = upkeeps[id];
     uint256 payment = getPaymentAmount(id);
     if (upkeep.balance < payment) {
-      return false;
+      return (false, performCalldata);
     }
 
     UpkeptInterface target = UpkeptInterface(upkeep.target);
     bytes memory queryData = abi.encodeWithSelector(target.checkForUpkeep.selector, upkeep.queryData);
-    (, bytes memory result) = upkeep.target.staticcall(queryData);
-    ( canPerform ) = abi.decode(result, (bool));
-
-    return canPerform;
+    (bool success, bytes memory result) = upkeep.target.staticcall(queryData);
+    if (!success) {
+      return (false, performCalldata);
+    }
+    return abi.decode(result, (bool, bytes));
   }
 
   function performUpkeep(
@@ -154,6 +144,18 @@ contract UpkeepRegistry {
     emit AddedFunds(id, _amount);
   }
 
+  function keepersFor(
+    uint256 id
+  )
+    external
+    view
+    returns (
+      address[] memory
+    )
+  {
+    return upkeeps[id].keepers;
+  }
+
   function getPaymentAmount(
     uint256 id
   )
@@ -172,7 +174,7 @@ contract UpkeepRegistry {
   function _validateQueryFunction(
     address _target
   )
-    internal
+    private
     view
     returns (bool)
   {
