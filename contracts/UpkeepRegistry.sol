@@ -15,19 +15,23 @@ contract UpkeepRegistry {
   IERC20 public immutable LINK;
   AggregatorInterface public immutable LINKETH;
   AggregatorInterface public immutable FASTGAS;
+  uint256 constant private LINK_DIVISIBILITY = 1e18;
 
   struct Job {
     address target;
     uint32 executeGas;
     uint96 balance;
     bytes queryData;
+    address[] keepers;
+    mapping(address => bool) isKeeper;
   }
 
   Job[] public jobs;
 
   event AddJob(
     uint256 indexed id,
-    uint32 executeGas
+    uint32 executeGas,
+    address[] keepers
   );
   event AddedFunds(
     uint256 indexed id,
@@ -54,12 +58,14 @@ contract UpkeepRegistry {
   function addJob(
     address _target,
     uint32 _gasLimit,
+    address[] calldata keepers,
     bytes calldata _queryData
   )
     external
   {
     require(_target.isContract(), "!contract");
     require(_gasLimit > 23000, "!gasLimit");
+    require(keepers.length > 0, "minimum of 1 keeper");
     require(_validateQueryFunction(_target), "!query");
 
     uint256 id = jobs.length;
@@ -67,9 +73,25 @@ contract UpkeepRegistry {
       target: _target,
       executeGas: _gasLimit,
       balance: 0,
+      keepers: keepers,
       queryData: _queryData
     }));
-    emit AddJob(id, _gasLimit);
+    for (uint256 i = 0; i<keepers.length; i++) {
+      jobs[id].isKeeper[keepers[i]] = true;
+    }
+    emit AddJob(id, _gasLimit, keepers);
+  }
+
+  function keepersFor(
+    uint256 id
+  )
+    external
+    view
+    returns (
+      address[] memory
+    )
+  {
+    return jobs[id].keepers;
   }
 
   function queryJob(
@@ -78,19 +100,21 @@ contract UpkeepRegistry {
     external
     view
     returns (
-      bool canExecute
+      bool canPerform
     )
   {
     Job storage job = jobs[id];
-    (uint256 totalPayment,) = getPaymentAmounts(id);
-    if (job.balance >= totalPayment) {
-      UpkeptInterface target = UpkeptInterface(job.target);
-      bytes memory queryData = abi.encodeWithSelector(target.checkForUpkeep.selector, job.queryData);
-      (, bytes memory result) = job.target.staticcall(queryData);
-      ( canExecute ) = abi.decode(result, (bool));
-    } else {
-      canExecute = false;
+    uint256 payment = getPaymentAmount(id);
+    if (job.balance < payment) {
+      return false;
     }
+
+    UpkeptInterface target = UpkeptInterface(job.target);
+    bytes memory queryData = abi.encodeWithSelector(target.checkForUpkeep.selector, job.queryData);
+    (, bytes memory result) = job.target.staticcall(queryData);
+    ( canPerform ) = abi.decode(result, (bool));
+
+    return canPerform;
   }
 
   function executeJob(
@@ -103,10 +127,10 @@ contract UpkeepRegistry {
     Job storage s_job = jobs[id];
     Job memory m_job = s_job;
 
-    (, uint256 _primaryPayment) = getPaymentAmounts(id);
-    require(m_job.balance >= _primaryPayment, "!executable");
-    s_job.balance = uint96(uint256(m_job.balance).sub(_primaryPayment));
-    LINK.transfer(msg.sender, _primaryPayment);
+    uint256 payment = getPaymentAmount(id);
+    require(m_job.balance >= payment, "!executable");
+    s_job.balance = uint96(uint256(m_job.balance).sub(payment));
+    LINK.transfer(msg.sender, payment);
 
     require(gasleft() > m_job.executeGas, "!gasleft");
 
@@ -128,32 +152,19 @@ contract UpkeepRegistry {
     emit AddedFunds(id, _amount);
   }
 
-  function getPaymentAmounts(
+  function getPaymentAmount(
     uint256 id
-  )
-    public
-    view
-    returns (
-      uint256 totalPayment,
-      uint256 primaryPayment
-    )
-  {
-    uint256 gasLimit = uint256(jobs[id].executeGas);
-    primaryPayment = getIndividualPaymentAmount(gasLimit);
-    totalPayment = primaryPayment.add(primaryPayment);
-  }
-
-  function getIndividualPaymentAmount(
-    uint256 _gasLimit
   )
     private
     view
-    returns (uint256)
+    returns (
+      uint256 payment
+    )
   {
+    uint256 gasLimit = uint256(jobs[id].executeGas);
     uint256 gasPrice = uint256(FASTGAS.latestAnswer());
     uint256 linkEthPrice = uint256(LINKETH.latestAnswer());
-    uint256 payment = gasPrice.mul(_gasLimit).mul(1e18).div(linkEthPrice);
-    return payment;
+    return gasPrice.mul(gasLimit).mul(LINK_DIVISIBILITY).div(linkEthPrice);
   }
 
   function _validateQueryFunction(

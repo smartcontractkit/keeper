@@ -7,9 +7,10 @@ const { BN, constants, ether, expectEvent, expectRevert, time } = require('@open
 
 contract('UpkeepRegistry', (accounts) => {
   const maintainer = accounts[0]
-  const user1 = accounts[1]
-  const user2 = accounts[2]
-  const user3 = accounts[3]
+  const keeper1 = accounts[1]
+  const keeper2 = accounts[2]
+  const keeper3 = accounts[3]
+  const keepers = [keeper1, keeper2, keeper3]
   const linkEth = new BN('30000000000000000')
   const gasWei = new BN('100000000000')
   const executeGas = new BN('100000')
@@ -31,15 +32,16 @@ contract('UpkeepRegistry', (accounts) => {
     )
     dummy = await Dummy.new()
     reverter = await Reverter.new()
-    await linkToken.transfer(user1, ether('100'), { from: maintainer })
-    await linkToken.transfer(user2, ether('100'), { from: maintainer })
-    await linkToken.transfer(user3, ether('100'), { from: maintainer })
+    await linkToken.transfer(keeper1, ether('100'), { from: maintainer })
+    await linkToken.transfer(keeper2, ether('100'), { from: maintainer })
+    await linkToken.transfer(keeper3, ether('100'), { from: maintainer })
 
     const { receipt } = await registry.addJob(
       dummy.address,
       executeGas,
+      keepers,
       emptyBytes,
-      { from: user1 }
+      { from: keeper1 }
     )
     jobId = receipt.logs[0].args.id
   })
@@ -50,6 +52,31 @@ contract('UpkeepRegistry', (accounts) => {
         registry.addJob(
           constants.ZERO_ADDRESS,
           executeGas,
+          keepers,
+          emptyBytes
+        ),
+        '!contract'
+      )
+    })
+
+    it('reverts if 0 keepers are passed', async () => {
+      await expectRevert(
+        registry.addJob(
+          dummy.address,
+          executeGas,
+          [],
+          emptyBytes
+        ),
+        'minimum of 1 keeper'
+      )
+    })
+
+    it('reverts if the target is not a contract', async () => {
+      await expectRevert(
+        registry.addJob(
+          constants.ZERO_ADDRESS,
+          executeGas,
+          keepers,
           emptyBytes
         ),
         '!contract'
@@ -61,6 +88,7 @@ contract('UpkeepRegistry', (accounts) => {
         registry.addJob(
           reverter.address,
           executeGas,
+          keepers,
           emptyBytes
         ),
         '!query'
@@ -71,35 +99,38 @@ contract('UpkeepRegistry', (accounts) => {
       const { receipt } = await registry.addJob(
         dummy.address,
         executeGas,
+        keepers,
         emptyBytes,
-        { from: user1 }
+        { from: keeper1 }
       )
       jobId = receipt.logs[0].args.id
       expectEvent(receipt, 'AddJob', {
         id: jobId,
-        executeGas: executeGas
+        executeGas: executeGas,
+        keepers: keepers
       })
       const job = await registry.jobs(jobId)
       assert.equal(dummy.address, job.target)
       assert.equal(0, job.balance)
       assert.equal(emptyBytes, job.queryData)
+      assert.deepEqual(keepers, await registry.keepersFor(jobId))
     })
   })
 
   describe('#addFunds', () => {
     beforeEach(async () => {
-      await linkToken.approve(registry.address, ether('100'), { from: user1 })
+      await linkToken.approve(registry.address, ether('100'), { from: keeper1 })
     })
 
     it('reverts if the job does not exist', async () => {
       await expectRevert(
-        registry.addFunds(jobId + 1, ether('1'), { from: user1 }),
+        registry.addFunds(jobId + 1, ether('1'), { from: keeper1 }),
         '!job'
       )
     })
 
     it('adds to the balance of the job', async () => {
-      await registry.addFunds(jobId, ether('1'), { from: user1 })
+      await registry.addFunds(jobId, ether('1'), { from: keeper1 })
       const job = await registry.jobs(jobId)
       assert.isTrue(ether('1').eq(job.balance))
     })
@@ -131,7 +162,7 @@ contract('UpkeepRegistry', (accounts) => {
         const dummyResponse = await dummy.checkForUpkeep.call("0x")
         assert.isTrue(dummyResponse.callable)
         await expectRevert(
-          registry.executeJob(jobId, { from: user1, gas: new BN('120000') }),
+          registry.executeJob(jobId, { from: keeper1, gas: new BN('120000') }),
           '!gasleft'
         )
       })
@@ -140,9 +171,9 @@ contract('UpkeepRegistry', (accounts) => {
         await dummy.setCanExecute(true)
         let dummyResponse = await dummy.checkForUpkeep.call("0x")
         assert.isTrue(dummyResponse.callable)
-        const balanceBefore = await linkToken.balanceOf(user1)
-        const tx = await registry.executeJob(jobId, { from: user1, gas: extraGas })
-        const balanceAfter = await linkToken.balanceOf(user1)
+        const balanceBefore = await linkToken.balanceOf(keeper1)
+        const tx = await registry.executeJob(jobId, { from: keeper1, gas: extraGas })
+        const balanceAfter = await linkToken.balanceOf(keeper1)
         assert.isTrue(balanceAfter.gt(balanceBefore))
         await expectEvent.inTransaction(tx.tx, UpkeepRegistry, 'Executed', {
           target: dummy.address,
@@ -156,16 +187,17 @@ contract('UpkeepRegistry', (accounts) => {
         const { receipt } = await registry.addJob(
           dummy.address,
           executeGas,
+          keepers,
           emptyBytes,
-          { from: user1 }
+          { from: keeper1 }
         )
         const jobId = receipt.logs[0].args.id
         await linkToken.approve(registry.address, ether('100'), { from: maintainer })
         await registry.addFunds(jobId, ether('100'), { from: maintainer })
         await dummy.setCanExecute(true)
-        const balanceBefore = await linkToken.balanceOf(user1)
-        const tx = await registry.executeJob(jobId, { from: user1 })
-        const balanceAfter = await linkToken.balanceOf(user1)
+        const balanceBefore = await linkToken.balanceOf(keeper1)
+        const tx = await registry.executeJob(jobId, { from: keeper1 })
+        const balanceAfter = await linkToken.balanceOf(keeper1)
         assert.isTrue(balanceAfter.gt(balanceBefore))
       })
     })
@@ -178,8 +210,8 @@ contract('UpkeepRegistry', (accounts) => {
 
     context('when the job is funded', () => {
       beforeEach(async () => {
-        await linkToken.approve(registry.address, ether('100'), { from: user1 })
-        await registry.addFunds(jobId, ether('100'), { from: user1 })
+        await linkToken.approve(registry.address, ether('100'), { from: keeper1 })
+        await registry.addFunds(jobId, ether('100'), { from: keeper1 })
       })
 
       it('returns false if the target cannot execute', async () => {
