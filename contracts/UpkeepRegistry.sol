@@ -19,6 +19,8 @@ contract UpkeepRegistry is Owned {
   uint256 constant private LINK_DIVISIBILITY = 1e18;
   bytes4 constant private CHECK_SELECTOR = UpkeptInterface.checkForUpkeep.selector;
   bytes4 constant private PERFORM_SELECTOR = UpkeptInterface.performUpkeep.selector;
+  uint256 public registrationCount;
+  mapping(uint256 => Registration) public registrations;
 
   struct Registration {
     address target;
@@ -28,8 +30,6 @@ contract UpkeepRegistry is Owned {
     address[] keepers;
     mapping(address => bool) isKeeper;
   }
-
-  Registration[] public registrations;
 
   event UpkeepRegistered(
     uint256 indexed id,
@@ -59,31 +59,33 @@ contract UpkeepRegistry is Owned {
   }
 
   function registerUpkeep(
-    address _target,
-    uint32 _gasLimit,
+    address target,
+    uint32 gasLimit,
     address[] calldata keepers,
-    bytes calldata _queryData
+    bytes calldata queryData
   )
     external
     onlyOwner()
   {
-    require(_target.isContract(), "!contract");
-    require(_gasLimit > 23000, "!gasLimit");
+    require(target.isContract(), "!contract");
+    require(gasLimit > 23000, "!gasLimit");
     require(keepers.length > 0, "minimum of 1 keeper");
-    require(validateQueryFunction(_target), "!query");
+    require(validateQueryFunction(target), "!query");
 
-    uint256 id = registrations.length;
-    registrations.push(Registration({
-      target: _target,
-      executeGas: _gasLimit,
+    uint256 id = registrationCount;
+    registrations[id] = Registration({
+      target: target,
+      executeGas: gasLimit,
       balance: 0,
       keepers: keepers,
-      checkData: _queryData
-    }));
+      checkData: queryData
+    });
+    registrationCount++;
+
     for (uint256 i = 0; i<keepers.length; i++) {
       registrations[id].isKeeper[keepers[i]] = true;
     }
-    emit UpkeepRegistered(id, _gasLimit, keepers);
+    emit UpkeepRegistered(id, gasLimit, keepers);
   }
 
   function checkForUpkeep(
@@ -117,12 +119,11 @@ contract UpkeepRegistry is Owned {
     bytes calldata peformData
   )
     external
+    validateRegistration(id)
     returns (
       bool success
     )
   {
-    require(registrations.length > id, "!registration");
-
     Registration storage s_registration = registrations[id];
     require(s_registration.isKeeper[sender], "only keepers");
 
@@ -139,9 +140,8 @@ contract UpkeepRegistry is Owned {
     bytes calldata peformData
   )
     external
+    validateRegistration(id)
   {
-    require(registrations.length > id, "!registration");
-
     Registration storage s_registration = registrations[id];
     Registration memory registration = s_registration;
     require(s_registration.isKeeper[msg.sender], "only keepers");
@@ -163,9 +163,8 @@ contract UpkeepRegistry is Owned {
     uint256 _amount
   )
     external
+    validateRegistration(id)
   {
-    require(registrations.length > id, "!registration");
-
     registrations[id].balance = uint96(uint256(registrations[id].balance).add(_amount));
     LINK.transferFrom(msg.sender, address(this), _amount);
     emit AddedFunds(id, _amount);
@@ -209,6 +208,13 @@ contract UpkeepRegistry is Owned {
     bytes memory data;
     (bool success,) = _target.staticcall(abi.encodeWithSelector(CHECK_SELECTOR, data));
     return success;
+  }
+
+  modifier validateRegistration(
+    uint256 id
+  ) {
+    require(registrations[id].target != address(0), "invalid upkeep id");
+    _;
   }
 
 }

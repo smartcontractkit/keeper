@@ -144,7 +144,7 @@ contract('UpkeepRegistry', (accounts) => {
     it('reverts if the registration does not exist', async () => {
       await expectRevert(
         registry.addFunds(id + 1, ether('1'), { from: keeper1 }),
-        '!registration'
+        'invalid upkeep id'
       )
     })
 
