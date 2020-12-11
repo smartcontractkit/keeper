@@ -14,7 +14,6 @@ contract('Registry', (accounts) => {
   const gasWei = new BN('100000000000')
   const executeGas = new BN('100000')
   const emptyBytes = '0x00'
-  const rewardCallers = new BN('3')
   const extraGas = new BN('250000')
   let linkToken, linkEthFeed, gasPriceFeed, registry, dummy, reverter, jobId
 
@@ -39,7 +38,6 @@ contract('Registry', (accounts) => {
     const { receipt } = await registry.addJob(
       dummy.address,
       executeGas,
-      rewardCallers,
       emptyBytes,
       { from: user1 }
     )
@@ -52,22 +50,9 @@ contract('Registry', (accounts) => {
         registry.addJob(
           constants.ZERO_ADDRESS,
           executeGas,
-          rewardCallers,
           emptyBytes
         ),
         '!contract'
-      )
-    })
-
-    it('reverts if rewardCallers is 0', async () => {
-      await expectRevert(
-        registry.addJob(
-          dummy.address,
-          executeGas,
-          0,
-          emptyBytes
-        ),
-        '!rewardCallers'
       )
     })
 
@@ -76,7 +61,6 @@ contract('Registry', (accounts) => {
         registry.addJob(
           reverter.address,
           executeGas,
-          rewardCallers,
           emptyBytes
         ),
         '!query'
@@ -87,16 +71,15 @@ contract('Registry', (accounts) => {
       const { receipt } = await registry.addJob(
         dummy.address,
         executeGas,
-        rewardCallers,
         emptyBytes,
         { from: user1 }
       )
+      jobId = receipt.logs[0].args.id
       expectEvent(receipt, 'AddJob', {
-        target: dummy.address,
+        id: jobId,
         executeGas: executeGas
       })
-      const jobID = receipt.logs[0].args.id
-      const job = await registry.jobs(jobID)
+      const job = await registry.jobs(jobId)
       assert.equal(receipt.blockNumber, job.lastExecuted)
       assert.equal(dummy.address, job.target)
       assert.equal(0, job.balance)
@@ -177,7 +160,6 @@ contract('Registry', (accounts) => {
         const { receipt } = await registry.addJob(
           dummy.address,
           executeGas,
-          rewardCallers,
           emptyBytes,
           { from: user1 }
         )

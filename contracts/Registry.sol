@@ -20,7 +20,6 @@ contract Registry {
   AggregatorInterface public immutable FASTGAS;
 
   struct Job {
-    uint8 rewardCallers;
     address target;
     uint32 executeGas;
     uint64 lastExecuted;
@@ -36,7 +35,6 @@ contract Registry {
 
   event AddJob(
     uint256 indexed id,
-    address target,
     uint32 executeGas
   );
   event AddedFunds(
@@ -64,27 +62,23 @@ contract Registry {
   function addJob(
     address _target,
     uint32 _gasLimit,
-    uint8 _rewardCallers,
     bytes calldata _executeData
   )
     external
   {
     require(_target.isContract(), "!contract");
-    require(_rewardCallers > 0, "!rewardCallers");
     require(_gasLimit > 23000, "!gasLimit");
     require(_validateQueryFunction(_target), "!query");
-    //Executor executor = new Executor();
 
     uint256 id = jobs.length;
     jobs.push(Job({
       target: _target,
       executeGas: _gasLimit,
-      rewardCallers: _rewardCallers,
       balance: 0,
       lastExecuted: uint64(block.number),
       executeData: _executeData
     }));
-    emit AddJob(id, _target, _gasLimit);
+    emit AddJob(id, _gasLimit);
   }
 
   function queryJob(
@@ -119,7 +113,6 @@ contract Registry {
     Job memory m_job = s_job;
     uint256 count = s_job.count[block.number];
 
-    require(count <= m_job.rewardCallers, "!count");
     require(!s_job.called[block.number][msg.sender], "called");
 
     (, uint256 _primaryPayment,) = getPaymentAmounts(id);
@@ -164,10 +157,9 @@ contract Registry {
     )
   {
     uint256 gasLimit = uint256(jobs[id].executeGas);
-    uint256 callers = uint256(jobs[id].rewardCallers);
     primaryPayment = getPrimaryPaymentAmount(gasLimit);
     secondaryPayment = getSecondaryPaymentAmount(primaryPayment);
-    totalPayment = primaryPayment.add(secondaryPayment.mul(callers));
+    totalPayment = primaryPayment.add(secondaryPayment.mul(1)); // FIXME
   }
 
   function getPrimaryPaymentAmount(
