@@ -1,6 +1,6 @@
 const UpkeepRegistry = artifacts.require('UpkeepRegistry')
-const Dummy = artifacts.require('Dummy')
-const Reverter = artifacts.require('Reverter')
+const UpkeptMock = artifacts.require('UpkeptMock')
+const UpkeptReverter = artifacts.require('UpkeptReverter')
 const { LinkToken } = require('@chainlink/contracts/truffle/v0.4/LinkToken')
 const { MockV2Aggregator } = require('@chainlink/contracts/truffle/v0.6/MockV2Aggregator')
 const { BN, constants, ether, expectEvent, expectRevert, time } = require('@openzeppelin/test-helpers')
@@ -17,7 +17,7 @@ contract('UpkeepRegistry', (accounts) => {
   const executeGas = new BN('100000')
   const emptyBytes = '0x00'
   const extraGas = new BN('250000')
-  let linkToken, linkEthFeed, gasPriceFeed, registry, dummy, reverter, upkeepId
+  let linkToken, linkEthFeed, gasPriceFeed, registry, mock, reverter, upkeepId
 
   beforeEach(async () => {
     LinkToken.setProvider(web3.currentProvider)
@@ -31,14 +31,14 @@ contract('UpkeepRegistry', (accounts) => {
       gasPriceFeed.address,
       { from: maintainer }
     )
-    dummy = await Dummy.new()
-    reverter = await Reverter.new()
+    mock = await UpkeptMock.new()
+    reverter = await UpkeptReverter.new()
     await linkToken.transfer(keeper1, ether('100'), { from: maintainer })
     await linkToken.transfer(keeper2, ether('100'), { from: maintainer })
     await linkToken.transfer(keeper3, ether('100'), { from: maintainer })
 
     const { receipt } = await registry.registerUpkeep(
-      dummy.address,
+      mock.address,
       executeGas,
       keepers,
       emptyBytes,
@@ -63,7 +63,7 @@ contract('UpkeepRegistry', (accounts) => {
     it('reverts if 0 keepers are passed', async () => {
       await expectRevert(
         registry.registerUpkeep(
-          dummy.address,
+          mock.address,
           executeGas,
           [],
           emptyBytes
@@ -98,7 +98,7 @@ contract('UpkeepRegistry', (accounts) => {
 
     it('creates a record of the upkeep', async () => {
       const { receipt } = await registry.registerUpkeep(
-        dummy.address,
+        mock.address,
         executeGas,
         keepers,
         emptyBytes,
@@ -111,7 +111,7 @@ contract('UpkeepRegistry', (accounts) => {
         keepers: keepers
       })
       const upkeep = await registry.upkeeps(upkeepId)
-      assert.equal(dummy.address, upkeep.target)
+      assert.equal(mock.address, upkeep.target)
       assert.equal(0, upkeep.balance)
       assert.equal(emptyBytes, upkeep.queryData)
       assert.deepEqual(keepers, await registry.keepersFor(upkeepId))
@@ -152,16 +152,16 @@ contract('UpkeepRegistry', (accounts) => {
       })
 
       it('does not revert if the target cannot execute', async () => {
-        const dummyResponse = await dummy.checkForUpkeep.call("0x")
-        assert.isFalse(dummyResponse.callable)
+        const mockResponse = await mock.checkForUpkeep.call("0x")
+        assert.isFalse(mockResponse.callable)
 
         await registry.performUpkeep(upkeepId, { from: keeper3 })
       })
 
       it('reverts if not enough gas supplied', async () => {
-        await dummy.setCanExecute(true)
-        const dummyResponse = await dummy.checkForUpkeep.call("0x")
-        assert.isTrue(dummyResponse.callable)
+        await mock.setCanExecute(true)
+        const mockResponse = await mock.checkForUpkeep.call("0x")
+        assert.isTrue(mockResponse.callable)
         await expectRevert(
           registry.performUpkeep(upkeepId, { from: keeper1, gas: new BN('120000') }),
           '!gasleft'
@@ -169,24 +169,24 @@ contract('UpkeepRegistry', (accounts) => {
       })
 
       it('executes always for the first caller if the target can execute', async () => {
-        await dummy.setCanExecute(true)
-        let dummyResponse = await dummy.checkForUpkeep.call("0x")
-        assert.isTrue(dummyResponse.callable)
+        await mock.setCanExecute(true)
+        let mockResponse = await mock.checkForUpkeep.call("0x")
+        assert.isTrue(mockResponse.callable)
         const balanceBefore = await linkToken.balanceOf(keeper1)
         const tx = await registry.performUpkeep(upkeepId, { from: keeper1, gas: extraGas })
         const balanceAfter = await linkToken.balanceOf(keeper1)
         assert.isTrue(balanceAfter.gt(balanceBefore))
         await expectEvent.inTransaction(tx.tx, UpkeepRegistry, 'UpkeepPerformed', {
-          target: dummy.address,
+          target: mock.address,
           success: true
         })
-        dummyResponse = await dummy.checkForUpkeep.call("0x")
-        assert.isFalse(dummyResponse.callable)
+        mockResponse = await mock.checkForUpkeep.call("0x")
+        assert.isFalse(mockResponse.callable)
       })
 
       it('pays the caller even if the target function fails', async () => {
         const { receipt } = await registry.registerUpkeep(
-          dummy.address,
+          mock.address,
           executeGas,
           keepers,
           emptyBytes,
@@ -195,7 +195,7 @@ contract('UpkeepRegistry', (accounts) => {
         const upkeepId = receipt.logs[0].args.id
         await linkToken.approve(registry.address, ether('100'), { from: maintainer })
         await registry.addFunds(upkeepId, ether('100'), { from: maintainer })
-        await dummy.setCanExecute(true)
+        await mock.setCanExecute(true)
         const balanceBefore = await linkToken.balanceOf(keeper1)
         const tx = await registry.performUpkeep(upkeepId, { from: keeper1 })
         const balanceAfter = await linkToken.balanceOf(keeper1)
@@ -224,16 +224,16 @@ contract('UpkeepRegistry', (accounts) => {
       })
 
       it('returns false if the target cannot execute', async () => {
-        const dummyResponse = await dummy.checkForUpkeep.call("0x")
-        assert.isFalse(dummyResponse.callable)
+        const mockResponse = await mock.checkForUpkeep.call("0x")
+        assert.isFalse(mockResponse.callable)
         const check = await registry.checkForUpkeep.call(upkeepId)
         assert.isFalse(check.canPerform)
       })
 
       it('returns true if the target can execute', async () => {
-        await dummy.setCanExecute(true)
-        const dummyResponse = await dummy.checkForUpkeep.call("0x")
-        assert.isTrue(dummyResponse.callable)
+        await mock.setCanExecute(true)
+        const mockResponse = await mock.checkForUpkeep.call("0x")
+        assert.isTrue(mockResponse.callable)
         const check = await registry.checkForUpkeep.call(upkeepId)
         assert.isTrue(check.canPerform)
       })

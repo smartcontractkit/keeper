@@ -2,7 +2,7 @@ pragma solidity 0.6.12;
 
 import '../UpkeptInterface.sol';
 
-contract Dummy is UpkeptInterface {
+contract UpkeptMock is UpkeptInterface {
   bool internal _canExecute;
 
   function setCanExecute(bool _value) public {
@@ -28,13 +28,5 @@ contract Dummy is UpkeptInterface {
   {
     require(_canExecute, "Cannot execute");
     setCanExecute(false);
-  }
-
-  function alwaysFails() external {
-    assert(false);
-  }
-
-  function kill() external {
-    selfdestruct(msg.sender);
   }
 }

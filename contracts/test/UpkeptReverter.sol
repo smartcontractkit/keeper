@@ -2,7 +2,7 @@ pragma solidity 0.6.12;
 
 import '../UpkeptInterface.sol';
 
-contract Reverter is UpkeptInterface {
+contract UpkeptReverter is UpkeptInterface {
 
   function checkForUpkeep(bytes calldata data)
     public
