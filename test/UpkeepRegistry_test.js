@@ -10,6 +10,7 @@ contract('UpkeepRegistry', (accounts) => {
   const keeper1 = accounts[1]
   const keeper2 = accounts[2]
   const keeper3 = accounts[3]
+  const nonkeeper = accounts[4]
   const keepers = [keeper1, keeper2, keeper3]
   const linkEth = new BN('30000000000000000')
   const gasWei = new BN('100000000000')
@@ -139,7 +140,7 @@ contract('UpkeepRegistry', (accounts) => {
   describe('#executeJob', () => {
     it('reverts if the job is not funded', async () => {
       await expectRevert(
-        registry.executeJob(jobId),
+        registry.executeJob(jobId, { from: keeper2 }),
         '!executable'
       )
     })
@@ -154,7 +155,7 @@ contract('UpkeepRegistry', (accounts) => {
         const dummyResponse = await dummy.checkForUpkeep.call("0x")
         assert.isFalse(dummyResponse.callable)
 
-        await registry.executeJob(jobId)
+        await registry.executeJob(jobId, { from: keeper3 })
       })
 
       it('reverts if not enough gas supplied', async () => {
@@ -199,6 +200,13 @@ contract('UpkeepRegistry', (accounts) => {
         const tx = await registry.executeJob(jobId, { from: keeper1 })
         const balanceAfter = await linkToken.balanceOf(keeper1)
         assert.isTrue(balanceAfter.gt(balanceBefore))
+      })
+
+      it('reverts if the job is not funded', async () => {
+        await expectRevert(
+          registry.executeJob(jobId, { from: nonkeeper }),
+          'only keepers'
+        )
       })
     })
   })

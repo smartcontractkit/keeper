@@ -126,16 +126,18 @@ contract UpkeepRegistry {
 
     Job storage s_job = jobs[id];
     Job memory m_job = s_job;
+    require(s_job.isKeeper[msg.sender], "only keepers");
 
     uint256 payment = getPaymentAmount(id);
     require(m_job.balance >= payment, "!executable");
     s_job.balance = uint96(uint256(m_job.balance).sub(payment));
+
     LINK.transfer(msg.sender, payment);
 
     require(gasleft() > m_job.executeGas, "!gasleft");
-
     UpkeptInterface target = UpkeptInterface(m_job.target);
     (bool success,) = address(target).call{gas: m_job.executeGas}(abi.encodeWithSelector(target.performUpkeep.selector, m_job.queryData));
+
     emit Executed(id, m_job.target, success);
   }
 
