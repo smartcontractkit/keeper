@@ -17,7 +17,7 @@ contract('UpkeepRegistry', (accounts) => {
   const executeGas = new BN('100000')
   const emptyBytes = '0x00'
   const extraGas = new BN('250000')
-  let linkToken, linkEthFeed, gasPriceFeed, registry, mock, upkeepId
+  let linkToken, linkEthFeed, gasPriceFeed, registry, mock, id
 
   beforeEach(async () => {
     LinkToken.setProvider(web3.currentProvider)
@@ -43,7 +43,7 @@ contract('UpkeepRegistry', (accounts) => {
       emptyBytes,
       { from: owner }
     )
-    upkeepId = receipt.logs[0].args.id
+    id = receipt.logs[0].args.id
   })
 
   describe('#registerUpkeep', () => {
@@ -114,7 +114,7 @@ contract('UpkeepRegistry', (accounts) => {
       )
     })
 
-    it('creates a record of the upkeep', async () => {
+    it('creates a record of the registration', async () => {
       const { receipt } = await registry.registerUpkeep(
         mock.address,
         executeGas,
@@ -122,17 +122,17 @@ contract('UpkeepRegistry', (accounts) => {
         emptyBytes,
         { from: owner }
       )
-      upkeepId = receipt.logs[0].args.id
+      id = receipt.logs[0].args.id
       expectEvent(receipt, 'UpkeepRegistered', {
-        id: upkeepId,
+        id: id,
         executeGas: executeGas,
         keepers: keepers
       })
-      const upkeep = await registry.upkeeps(upkeepId)
-      assert.equal(mock.address, upkeep.target)
-      assert.equal(0, upkeep.balance)
-      assert.equal(emptyBytes, upkeep.checkData)
-      assert.deepEqual(keepers, await registry.keepersFor(upkeepId))
+      const registration = await registry.registrations(id)
+      assert.equal(mock.address, registration.target)
+      assert.equal(0, registration.balance)
+      assert.equal(emptyBytes, registration.checkData)
+      assert.deepEqual(keepers, await registry.keepersFor(id))
     })
   })
 
@@ -141,36 +141,36 @@ contract('UpkeepRegistry', (accounts) => {
       await linkToken.approve(registry.address, ether('100'), { from: keeper1 })
     })
 
-    it('reverts if the upkeep does not exist', async () => {
+    it('reverts if the registration does not exist', async () => {
       await expectRevert(
-        registry.addFunds(upkeepId + 1, ether('1'), { from: keeper1 }),
-        '!upkeep'
+        registry.addFunds(id + 1, ether('1'), { from: keeper1 }),
+        '!registration'
       )
     })
 
-    it('adds to the balance of the upkeep', async () => {
-      await registry.addFunds(upkeepId, ether('1'), { from: keeper1 })
-      const upkeep = await registry.upkeeps(upkeepId)
-      assert.isTrue(ether('1').eq(upkeep.balance))
+    it('adds to the balance of the registration', async () => {
+      await registry.addFunds(id, ether('1'), { from: keeper1 })
+      const registration = await registry.registrations(id)
+      assert.isTrue(ether('1').eq(registration.balance))
     })
   })
 
   describe('#checkForUpkeep', () => {
     it('returns false if the upkeep is not funded', async () => {
-      const check = await registry.checkForUpkeep.call(upkeepId)
+      const check = await registry.checkForUpkeep.call(id)
       assert.isFalse(check.canPerform)
     })
 
-    context('when the upkeep is funded', () => {
+    context('when the registration is funded', () => {
       beforeEach(async () => {
         await linkToken.approve(registry.address, ether('100'), { from: keeper1 })
-        await registry.addFunds(upkeepId, ether('100'), { from: keeper1 })
+        await registry.addFunds(id, ether('100'), { from: keeper1 })
       })
 
       it('returns false if the target cannot execute', async () => {
         const mockResponse = await mock.checkForUpkeep.call("0x")
         assert.isFalse(mockResponse.callable)
-        const check = await registry.checkForUpkeep.call(upkeepId)
+        const check = await registry.checkForUpkeep.call(id)
         assert.isFalse(check.canPerform)
       })
 
@@ -178,67 +178,67 @@ contract('UpkeepRegistry', (accounts) => {
         await mock.setCanExecute(true)
         const mockResponse = await mock.checkForUpkeep.call("0x")
         assert.isTrue(mockResponse.callable)
-        const check = await registry.checkForUpkeep.call(upkeepId)
+        const check = await registry.checkForUpkeep.call(id)
         assert.isTrue(check.canPerform)
       })
     })
   })
 
   describe('#tryUpkeep', () => {
-    it('returns false if the upkeep is not funded', async () => {
+    it('returns false if the registration is not funded', async () => {
       await expectRevert(
-        registry.tryUpkeep(keeper1, upkeepId, "0x"),
+        registry.tryUpkeep(keeper1, id, "0x"),
         "!executable"
       )
     })
 
-    context('when the upkeep is funded', () => {
+    context('when the registration is funded', () => {
       beforeEach(async () => {
         await linkToken.approve(registry.address, ether('100'), { from: owner })
-        await registry.addFunds(upkeepId, ether('100'), { from: owner })
+        await registry.addFunds(id, ether('100'), { from: owner })
       })
 
       it('reverts if the target cannot execute', async () => {
         await expectRevert(
-          registry.tryUpkeep.call(keeper1, upkeepId, "0x"),
+          registry.tryUpkeep.call(keeper1, id, "0x"),
           'upkeep failed'
         )
       })
 
       it('reverts if the sender is not a target', async () => {
         await expectRevert(
-          registry.tryUpkeep.call(nonkeeper, upkeepId, "0x"),
+          registry.tryUpkeep.call(nonkeeper, id, "0x"),
           'only keepers'
         )
       })
 
       it('returns true if the contract can execute', async () => {
         await mock.setCanExecute(true)
-        assert.isTrue(await registry.tryUpkeep.call(keeper1, upkeepId, "0x"))
+        assert.isTrue(await registry.tryUpkeep.call(keeper1, id, "0x"))
       })
     })
   })
 
 
   describe('#performUpkeep', () => {
-    it('reverts if the upkeep is not funded', async () => {
+    it('reverts if the registration is not funded', async () => {
       await expectRevert(
-        registry.performUpkeep(upkeepId, "0x", { from: keeper2 }),
+        registry.performUpkeep(id, "0x", { from: keeper2 }),
         '!executable'
       )
     })
 
-    context('when the upkeep is funded', () => {
+    context('when the registration is funded', () => {
       beforeEach(async () => {
         await linkToken.approve(registry.address, ether('100'), { from: owner })
-        await registry.addFunds(upkeepId, ether('100'), { from: owner })
+        await registry.addFunds(id, ether('100'), { from: owner })
       })
 
       it('does not revert if the target cannot execute', async () => {
         const mockResponse = await mock.checkForUpkeep.call("0x")
         assert.isFalse(mockResponse.callable)
 
-        await registry.performUpkeep(upkeepId, "0x", { from: keeper3 })
+        await registry.performUpkeep(id, "0x", { from: keeper3 })
       })
 
       it('reverts if not enough gas supplied', async () => {
@@ -246,7 +246,7 @@ contract('UpkeepRegistry', (accounts) => {
         const mockResponse = await mock.checkForUpkeep.call("0x")
         assert.isTrue(mockResponse.callable)
         await expectRevert(
-          registry.performUpkeep(upkeepId, "0x", { from: keeper1, gas: new BN('120000') }),
+          registry.performUpkeep(id, "0x", { from: keeper1, gas: new BN('120000') }),
           '!gasleft'
         )
       })
@@ -256,7 +256,7 @@ contract('UpkeepRegistry', (accounts) => {
         let mockResponse = await mock.checkForUpkeep.call("0x")
         assert.isTrue(mockResponse.callable)
         const balanceBefore = await linkToken.balanceOf(keeper1)
-        const tx = await registry.performUpkeep(upkeepId, "0x", { from: keeper1, gas: extraGas })
+        const tx = await registry.performUpkeep(id, "0x", { from: keeper1, gas: extraGas })
         const balanceAfter = await linkToken.balanceOf(keeper1)
         assert.isTrue(balanceAfter.gt(balanceBefore))
         await expectEvent.inTransaction(tx.tx, UpkeepRegistry, 'UpkeepPerformed', {
@@ -270,7 +270,7 @@ contract('UpkeepRegistry', (accounts) => {
       it('passes the calldata on to the upkept target', async () => {
         const performData = "0xc0ffeec0ffee"
         await mock.setCanExecute(true)
-        const tx = await registry.performUpkeep(upkeepId, performData, { from: keeper1 })
+        const tx = await registry.performUpkeep(id, performData, { from: keeper1 })
         await expectEvent.inTransaction(tx.tx, UpkeptMock, 'UpkeepPerformedWith', {
           upkeepData: performData
         })
@@ -284,19 +284,19 @@ contract('UpkeepRegistry', (accounts) => {
           emptyBytes,
           { from: owner }
         )
-        const upkeepId = receipt.logs[0].args.id
+        const id = receipt.logs[0].args.id
         await linkToken.approve(registry.address, ether('100'), { from: owner })
-        await registry.addFunds(upkeepId, ether('100'), { from: owner })
+        await registry.addFunds(id, ether('100'), { from: owner })
         await mock.setCanExecute(true)
         const balanceBefore = await linkToken.balanceOf(keeper1)
-        const tx = await registry.performUpkeep(upkeepId, "0x", { from: keeper1 })
+        const tx = await registry.performUpkeep(id, "0x", { from: keeper1 })
         const balanceAfter = await linkToken.balanceOf(keeper1)
         assert.isTrue(balanceAfter.gt(balanceBefore))
       })
 
       it('reverts if the upkeep is called by a non-keeper', async () => {
         await expectRevert(
-          registry.performUpkeep(upkeepId, "0x", { from: nonkeeper }),
+          registry.performUpkeep(id, "0x", { from: nonkeeper }),
           'only keepers'
         )
       })

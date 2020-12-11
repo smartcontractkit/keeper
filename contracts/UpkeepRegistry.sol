@@ -20,7 +20,7 @@ contract UpkeepRegistry is Owned {
   bytes4 constant private CHECK_SELECTOR = UpkeptInterface.checkForUpkeep.selector;
   bytes4 constant private PERFORM_SELECTOR = UpkeptInterface.performUpkeep.selector;
 
-  struct Upkeep {
+  struct Registration {
     address target;
     uint32 executeGas;
     uint96 balance;
@@ -29,7 +29,7 @@ contract UpkeepRegistry is Owned {
     mapping(address => bool) isKeeper;
   }
 
-  Upkeep[] public upkeeps;
+  Registration[] public registrations;
 
   event UpkeepRegistered(
     uint256 indexed id,
@@ -70,10 +70,10 @@ contract UpkeepRegistry is Owned {
     require(_target.isContract(), "!contract");
     require(_gasLimit > 23000, "!gasLimit");
     require(keepers.length > 0, "minimum of 1 keeper");
-    require(_validateQueryFunction(_target), "!query");
+    require(validateQueryFunction(_target), "!query");
 
-    uint256 id = upkeeps.length;
-    upkeeps.push(Upkeep({
+    uint256 id = registrations.length;
+    registrations.push(Registration({
       target: _target,
       executeGas: _gasLimit,
       balance: 0,
@@ -81,7 +81,7 @@ contract UpkeepRegistry is Owned {
       checkData: _queryData
     }));
     for (uint256 i = 0; i<keepers.length; i++) {
-      upkeeps[id].isKeeper[keepers[i]] = true;
+      registrations[id].isKeeper[keepers[i]] = true;
     }
     emit UpkeepRegistered(id, _gasLimit, keepers);
   }
@@ -96,14 +96,14 @@ contract UpkeepRegistry is Owned {
       bytes memory performData
     )
   {
-    Upkeep storage upkeep = upkeeps[id];
+    Registration storage registration = registrations[id];
     uint256 payment = getPaymentAmount(id);
-    if (upkeep.balance < payment) {
+    if (registration.balance < payment) {
       return (false, performData);
     }
 
-    bytes memory toCall = abi.encodeWithSelector(CHECK_SELECTOR, upkeep.checkData);
-    (bool success, bytes memory result) = upkeep.target.staticcall(toCall);
+    bytes memory toCall = abi.encodeWithSelector(CHECK_SELECTOR, registration.checkData);
+    (bool success, bytes memory result) = registration.target.staticcall(toCall);
     if (!success) {
       return (false, performData);
     }
@@ -121,16 +121,16 @@ contract UpkeepRegistry is Owned {
       bool success
     )
   {
-    require(upkeeps.length > id, "!upkeep");
+    require(registrations.length > id, "!registration");
 
-    Upkeep storage s_upkeep = upkeeps[id];
-    require(s_upkeep.isKeeper[sender], "only keepers");
+    Registration storage s_registration = registrations[id];
+    require(s_registration.isKeeper[sender], "only keepers");
 
     uint256 payment = getPaymentAmount(id);
-    require(s_upkeep.balance >= payment, "!executable");
+    require(s_registration.balance >= payment, "!executable");
 
     bytes memory toCall = abi.encodeWithSelector(PERFORM_SELECTOR, peformData);
-    (success,) = s_upkeep.target.call{gas: s_upkeep.executeGas}(toCall);
+    (success,) = s_registration.target.call{gas: s_registration.executeGas}(toCall);
     require(success, "upkeep failed");
   }
 
@@ -140,22 +140,22 @@ contract UpkeepRegistry is Owned {
   )
     external
   {
-    require(upkeeps.length > id, "!upkeep");
+    require(registrations.length > id, "!registration");
 
-    Upkeep storage s_upkeep = upkeeps[id];
-    Upkeep memory upkeep = s_upkeep;
-    require(s_upkeep.isKeeper[msg.sender], "only keepers");
+    Registration storage s_registration = registrations[id];
+    Registration memory registration = s_registration;
+    require(s_registration.isKeeper[msg.sender], "only keepers");
 
     uint256 payment = getPaymentAmount(id);
-    require(upkeep.balance >= payment, "!executable");
-    s_upkeep.balance = uint96(uint256(upkeep.balance).sub(payment));
+    require(registration.balance >= payment, "!executable");
+    s_registration.balance = uint96(uint256(registration.balance).sub(payment));
 
-    require(gasleft() > upkeep.executeGas, "!gasleft");
+    require(gasleft() > registration.executeGas, "!gasleft");
     bytes memory toCall = abi.encodeWithSelector(PERFORM_SELECTOR, peformData);
-    (bool success,) = upkeep.target.call{gas: upkeep.executeGas}(toCall);
+    (bool success,) = registration.target.call{gas: registration.executeGas}(toCall);
 
     LINK.transfer(msg.sender, payment);
-    emit UpkeepPerformed(id, upkeep.target, success);
+    emit UpkeepPerformed(id, registration.target, success);
   }
 
   function addFunds(
@@ -164,9 +164,9 @@ contract UpkeepRegistry is Owned {
   )
     external
   {
-    require(upkeeps.length > id, "!upkeep");
+    require(registrations.length > id, "!registration");
 
-    upkeeps[id].balance = uint96(uint256(upkeeps[id].balance).add(_amount));
+    registrations[id].balance = uint96(uint256(registrations[id].balance).add(_amount));
     LINK.transferFrom(msg.sender, address(this), _amount);
     emit AddedFunds(id, _amount);
   }
@@ -180,7 +180,7 @@ contract UpkeepRegistry is Owned {
       address[] memory
     )
   {
-    return upkeeps[id].keepers;
+    return registrations[id].keepers;
   }
 
   function getPaymentAmount(
@@ -192,13 +192,13 @@ contract UpkeepRegistry is Owned {
       uint256 payment
     )
   {
-    uint256 gasLimit = uint256(upkeeps[id].executeGas);
+    uint256 gasLimit = uint256(registrations[id].executeGas);
     uint256 gasPrice = uint256(FASTGAS.latestAnswer());
     uint256 linkEthPrice = uint256(LINKETH.latestAnswer());
     return gasPrice.mul(gasLimit).mul(LINK_DIVISIBILITY).div(linkEthPrice);
   }
 
-  function _validateQueryFunction(
+  function validateQueryFunction(
     address _target
   )
     private
@@ -207,7 +207,7 @@ contract UpkeepRegistry is Owned {
   {
     UpkeptInterface target = UpkeptInterface(_target);
     bytes memory data;
-    (bool success,) = _target.staticcall(abi.encodeWithSelector(target.checkForUpkeep.selector, data));
+    (bool success,) = _target.staticcall(abi.encodeWithSelector(CHECK_SELECTOR, data));
     return success;
   }
 
