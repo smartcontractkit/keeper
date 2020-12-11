@@ -109,6 +109,29 @@ contract UpkeepRegistry {
     return abi.decode(result, (bool, bytes));
   }
 
+  function tryUpkeep(
+    address sender,
+    uint256 id,
+    bytes calldata peformData
+  )
+    external
+    returns (
+      bool success
+    )
+  {
+    require(upkeeps.length > id, "!upkeep");
+
+    Upkeep storage s_upkeep = upkeeps[id];
+    require(s_upkeep.isKeeper[sender], "only keepers");
+
+    uint256 payment = getPaymentAmount(id);
+    require(s_upkeep.balance >= payment, "!executable");
+
+    bytes memory toCall = abi.encodeWithSelector(PERFORM_SELECTOR, peformData);
+    (success,) = s_upkeep.target.call{gas: s_upkeep.executeGas}(toCall);
+    require(success, "upkeep failed");
+  }
+
   function performUpkeep(
     uint256 id,
     bytes calldata peformData

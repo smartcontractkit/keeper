@@ -166,6 +166,42 @@ contract('UpkeepRegistry', (accounts) => {
     })
   })
 
+  describe('#tryUpkeep', () => {
+    it('returns false if the upkeep is not funded', async () => {
+      await expectRevert(
+        registry.tryUpkeep(keeper1, upkeepId, "0x"),
+        "!executable"
+      )
+    })
+
+    context('when the upkeep is funded', () => {
+      beforeEach(async () => {
+        await linkToken.approve(registry.address, ether('100'), { from: maintainer })
+        await registry.addFunds(upkeepId, ether('100'), { from: maintainer })
+      })
+
+      it('reverts if the target cannot execute', async () => {
+        await expectRevert(
+          registry.tryUpkeep.call(keeper1, upkeepId, "0x"),
+          'upkeep failed'
+        )
+      })
+
+      it('reverts if the sender is not a target', async () => {
+        await expectRevert(
+          registry.tryUpkeep.call(nonkeeper, upkeepId, "0x"),
+          'only keepers'
+        )
+      })
+
+      it('returns true if the contract can execute', async () => {
+        await mock.setCanExecute(true)
+        assert.isTrue(await registry.tryUpkeep.call(keeper1, upkeepId, "0x"))
+      })
+    })
+  })
+
+
   describe('#performUpkeep', () => {
     it('reverts if the upkeep is not funded', async () => {
       await expectRevert(
