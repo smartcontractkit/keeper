@@ -17,7 +17,7 @@ contract UpkeepRegistry {
   AggregatorInterface public immutable FASTGAS;
   uint256 constant private LINK_DIVISIBILITY = 1e18;
 
-  struct Job {
+  struct Upkeep {
     address target;
     uint32 executeGas;
     uint96 balance;
@@ -26,9 +26,9 @@ contract UpkeepRegistry {
     mapping(address => bool) isKeeper;
   }
 
-  Job[] public jobs;
+  Upkeep[] public upkeeps;
 
-  event AddJob(
+  event UpkeepRegistered(
     uint256 indexed id,
     uint32 executeGas,
     address[] keepers
@@ -37,7 +37,7 @@ contract UpkeepRegistry {
     uint256 indexed id,
     uint256 amount
   );
-  event Executed(
+  event UpkeepPerformed(
     uint256 indexed id,
     address indexed target,
     bool success
@@ -55,7 +55,7 @@ contract UpkeepRegistry {
     FASTGAS = AggregatorInterface(_fastGas);
   }
 
-  function addJob(
+  function registerUpkeep(
     address _target,
     uint32 _gasLimit,
     address[] calldata keepers,
@@ -68,8 +68,8 @@ contract UpkeepRegistry {
     require(keepers.length > 0, "minimum of 1 keeper");
     require(_validateQueryFunction(_target), "!query");
 
-    uint256 id = jobs.length;
-    jobs.push(Job({
+    uint256 id = upkeeps.length;
+    upkeeps.push(Upkeep({
       target: _target,
       executeGas: _gasLimit,
       balance: 0,
@@ -77,9 +77,9 @@ contract UpkeepRegistry {
       queryData: _queryData
     }));
     for (uint256 i = 0; i<keepers.length; i++) {
-      jobs[id].isKeeper[keepers[i]] = true;
+      upkeeps[id].isKeeper[keepers[i]] = true;
     }
-    emit AddJob(id, _gasLimit, keepers);
+    emit UpkeepRegistered(id, _gasLimit, keepers);
   }
 
   function keepersFor(
@@ -91,10 +91,10 @@ contract UpkeepRegistry {
       address[] memory
     )
   {
-    return jobs[id].keepers;
+    return upkeeps[id].keepers;
   }
 
-  function queryJob(
+  function checkForUpkeep(
     uint256 id
   )
     external
@@ -103,42 +103,42 @@ contract UpkeepRegistry {
       bool canPerform
     )
   {
-    Job storage job = jobs[id];
+    Upkeep storage upkeep = upkeeps[id];
     uint256 payment = getPaymentAmount(id);
-    if (job.balance < payment) {
+    if (upkeep.balance < payment) {
       return false;
     }
 
-    UpkeptInterface target = UpkeptInterface(job.target);
-    bytes memory queryData = abi.encodeWithSelector(target.checkForUpkeep.selector, job.queryData);
-    (, bytes memory result) = job.target.staticcall(queryData);
+    UpkeptInterface target = UpkeptInterface(upkeep.target);
+    bytes memory queryData = abi.encodeWithSelector(target.checkForUpkeep.selector, upkeep.queryData);
+    (, bytes memory result) = upkeep.target.staticcall(queryData);
     ( canPerform ) = abi.decode(result, (bool));
 
     return canPerform;
   }
 
-  function executeJob(
+  function performUpkeep(
     uint256 id
   )
     external
   {
-    require(jobs.length > id, "!job");
+    require(upkeeps.length > id, "!upkeep");
 
-    Job storage s_job = jobs[id];
-    Job memory m_job = s_job;
-    require(s_job.isKeeper[msg.sender], "only keepers");
+    Upkeep storage s_upkeep = upkeeps[id];
+    Upkeep memory m_upkeep = s_upkeep;
+    require(s_upkeep.isKeeper[msg.sender], "only keepers");
 
     uint256 payment = getPaymentAmount(id);
-    require(m_job.balance >= payment, "!executable");
-    s_job.balance = uint96(uint256(m_job.balance).sub(payment));
+    require(m_upkeep.balance >= payment, "!executable");
+    s_upkeep.balance = uint96(uint256(m_upkeep.balance).sub(payment));
 
     LINK.transfer(msg.sender, payment);
 
-    require(gasleft() > m_job.executeGas, "!gasleft");
-    UpkeptInterface target = UpkeptInterface(m_job.target);
-    (bool success,) = address(target).call{gas: m_job.executeGas}(abi.encodeWithSelector(target.performUpkeep.selector, m_job.queryData));
+    require(gasleft() > m_upkeep.executeGas, "!gasleft");
+    UpkeptInterface target = UpkeptInterface(m_upkeep.target);
+    (bool success,) = address(target).call{gas: m_upkeep.executeGas}(abi.encodeWithSelector(target.performUpkeep.selector, m_upkeep.queryData));
 
-    emit Executed(id, m_job.target, success);
+    emit UpkeepPerformed(id, m_upkeep.target, success);
   }
 
   function addFunds(
@@ -147,9 +147,9 @@ contract UpkeepRegistry {
   )
     external
   {
-    require(jobs.length > id, "!job");
+    require(upkeeps.length > id, "!upkeep");
 
-    jobs[id].balance = uint96(uint256(jobs[id].balance).add(_amount));
+    upkeeps[id].balance = uint96(uint256(upkeeps[id].balance).add(_amount));
     LINK.transferFrom(msg.sender, address(this), _amount);
     emit AddedFunds(id, _amount);
   }
@@ -163,7 +163,7 @@ contract UpkeepRegistry {
       uint256 payment
     )
   {
-    uint256 gasLimit = uint256(jobs[id].executeGas);
+    uint256 gasLimit = uint256(upkeeps[id].executeGas);
     uint256 gasPrice = uint256(FASTGAS.latestAnswer());
     uint256 linkEthPrice = uint256(LINKETH.latestAnswer());
     return gasPrice.mul(gasLimit).mul(LINK_DIVISIBILITY).div(linkEthPrice);

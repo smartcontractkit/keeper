@@ -17,7 +17,7 @@ contract('UpkeepRegistry', (accounts) => {
   const executeGas = new BN('100000')
   const emptyBytes = '0x00'
   const extraGas = new BN('250000')
-  let linkToken, linkEthFeed, gasPriceFeed, registry, dummy, reverter, jobId
+  let linkToken, linkEthFeed, gasPriceFeed, registry, dummy, reverter, upkeepId
 
   beforeEach(async () => {
     LinkToken.setProvider(web3.currentProvider)
@@ -37,20 +37,20 @@ contract('UpkeepRegistry', (accounts) => {
     await linkToken.transfer(keeper2, ether('100'), { from: maintainer })
     await linkToken.transfer(keeper3, ether('100'), { from: maintainer })
 
-    const { receipt } = await registry.addJob(
+    const { receipt } = await registry.registerUpkeep(
       dummy.address,
       executeGas,
       keepers,
       emptyBytes,
       { from: keeper1 }
     )
-    jobId = receipt.logs[0].args.id
+    upkeepId = receipt.logs[0].args.id
   })
 
-  describe('#addJob', () => {
+  describe('#registerUpkeep', () => {
     it('reverts if the target is not a contract', async () => {
       await expectRevert(
-        registry.addJob(
+        registry.registerUpkeep(
           constants.ZERO_ADDRESS,
           executeGas,
           keepers,
@@ -62,7 +62,7 @@ contract('UpkeepRegistry', (accounts) => {
 
     it('reverts if 0 keepers are passed', async () => {
       await expectRevert(
-        registry.addJob(
+        registry.registerUpkeep(
           dummy.address,
           executeGas,
           [],
@@ -74,7 +74,7 @@ contract('UpkeepRegistry', (accounts) => {
 
     it('reverts if the target is not a contract', async () => {
       await expectRevert(
-        registry.addJob(
+        registry.registerUpkeep(
           constants.ZERO_ADDRESS,
           executeGas,
           keepers,
@@ -86,7 +86,7 @@ contract('UpkeepRegistry', (accounts) => {
 
     it('reverts if the query function is invalid', async () => {
       await expectRevert(
-        registry.addJob(
+        registry.registerUpkeep(
           reverter.address,
           executeGas,
           keepers,
@@ -96,25 +96,25 @@ contract('UpkeepRegistry', (accounts) => {
       )
     })
 
-    it('creates a record of the job', async () => {
-      const { receipt } = await registry.addJob(
+    it('creates a record of the upkeep', async () => {
+      const { receipt } = await registry.registerUpkeep(
         dummy.address,
         executeGas,
         keepers,
         emptyBytes,
         { from: keeper1 }
       )
-      jobId = receipt.logs[0].args.id
-      expectEvent(receipt, 'AddJob', {
-        id: jobId,
+      upkeepId = receipt.logs[0].args.id
+      expectEvent(receipt, 'UpkeepRegistered', {
+        id: upkeepId,
         executeGas: executeGas,
         keepers: keepers
       })
-      const job = await registry.jobs(jobId)
-      assert.equal(dummy.address, job.target)
-      assert.equal(0, job.balance)
-      assert.equal(emptyBytes, job.queryData)
-      assert.deepEqual(keepers, await registry.keepersFor(jobId))
+      const upkeep = await registry.upkeeps(upkeepId)
+      assert.equal(dummy.address, upkeep.target)
+      assert.equal(0, upkeep.balance)
+      assert.equal(emptyBytes, upkeep.queryData)
+      assert.deepEqual(keepers, await registry.keepersFor(upkeepId))
     })
   })
 
@@ -123,39 +123,39 @@ contract('UpkeepRegistry', (accounts) => {
       await linkToken.approve(registry.address, ether('100'), { from: keeper1 })
     })
 
-    it('reverts if the job does not exist', async () => {
+    it('reverts if the upkeep does not exist', async () => {
       await expectRevert(
-        registry.addFunds(jobId + 1, ether('1'), { from: keeper1 }),
-        '!job'
+        registry.addFunds(upkeepId + 1, ether('1'), { from: keeper1 }),
+        '!upkeep'
       )
     })
 
-    it('adds to the balance of the job', async () => {
-      await registry.addFunds(jobId, ether('1'), { from: keeper1 })
-      const job = await registry.jobs(jobId)
-      assert.isTrue(ether('1').eq(job.balance))
+    it('adds to the balance of the upkeep', async () => {
+      await registry.addFunds(upkeepId, ether('1'), { from: keeper1 })
+      const upkeep = await registry.upkeeps(upkeepId)
+      assert.isTrue(ether('1').eq(upkeep.balance))
     })
   })
 
-  describe('#executeJob', () => {
-    it('reverts if the job is not funded', async () => {
+  describe('#performUpkeep', () => {
+    it('reverts if the upkeep is not funded', async () => {
       await expectRevert(
-        registry.executeJob(jobId, { from: keeper2 }),
+        registry.performUpkeep(upkeepId, { from: keeper2 }),
         '!executable'
       )
     })
 
-    context('when the job is funded', () => {
+    context('when the upkeep is funded', () => {
       beforeEach(async () => {
         await linkToken.approve(registry.address, ether('100'), { from: maintainer })
-        await registry.addFunds(jobId, ether('100'), { from: maintainer })
+        await registry.addFunds(upkeepId, ether('100'), { from: maintainer })
       })
 
       it('does not revert if the target cannot execute', async () => {
         const dummyResponse = await dummy.checkForUpkeep.call("0x")
         assert.isFalse(dummyResponse.callable)
 
-        await registry.executeJob(jobId, { from: keeper3 })
+        await registry.performUpkeep(upkeepId, { from: keeper3 })
       })
 
       it('reverts if not enough gas supplied', async () => {
@@ -163,7 +163,7 @@ contract('UpkeepRegistry', (accounts) => {
         const dummyResponse = await dummy.checkForUpkeep.call("0x")
         assert.isTrue(dummyResponse.callable)
         await expectRevert(
-          registry.executeJob(jobId, { from: keeper1, gas: new BN('120000') }),
+          registry.performUpkeep(upkeepId, { from: keeper1, gas: new BN('120000') }),
           '!gasleft'
         )
       })
@@ -173,10 +173,10 @@ contract('UpkeepRegistry', (accounts) => {
         let dummyResponse = await dummy.checkForUpkeep.call("0x")
         assert.isTrue(dummyResponse.callable)
         const balanceBefore = await linkToken.balanceOf(keeper1)
-        const tx = await registry.executeJob(jobId, { from: keeper1, gas: extraGas })
+        const tx = await registry.performUpkeep(upkeepId, { from: keeper1, gas: extraGas })
         const balanceAfter = await linkToken.balanceOf(keeper1)
         assert.isTrue(balanceAfter.gt(balanceBefore))
-        await expectEvent.inTransaction(tx.tx, UpkeepRegistry, 'Executed', {
+        await expectEvent.inTransaction(tx.tx, UpkeepRegistry, 'UpkeepPerformed', {
           target: dummy.address,
           success: true
         })
@@ -185,54 +185,54 @@ contract('UpkeepRegistry', (accounts) => {
       })
 
       it('pays the caller even if the target function fails', async () => {
-        const { receipt } = await registry.addJob(
+        const { receipt } = await registry.registerUpkeep(
           dummy.address,
           executeGas,
           keepers,
           emptyBytes,
           { from: keeper1 }
         )
-        const jobId = receipt.logs[0].args.id
+        const upkeepId = receipt.logs[0].args.id
         await linkToken.approve(registry.address, ether('100'), { from: maintainer })
-        await registry.addFunds(jobId, ether('100'), { from: maintainer })
+        await registry.addFunds(upkeepId, ether('100'), { from: maintainer })
         await dummy.setCanExecute(true)
         const balanceBefore = await linkToken.balanceOf(keeper1)
-        const tx = await registry.executeJob(jobId, { from: keeper1 })
+        const tx = await registry.performUpkeep(upkeepId, { from: keeper1 })
         const balanceAfter = await linkToken.balanceOf(keeper1)
         assert.isTrue(balanceAfter.gt(balanceBefore))
       })
 
-      it('reverts if the job is not funded', async () => {
+      it('reverts if the upkeep is not funded', async () => {
         await expectRevert(
-          registry.executeJob(jobId, { from: nonkeeper }),
+          registry.performUpkeep(upkeepId, { from: nonkeeper }),
           'only keepers'
         )
       })
     })
   })
 
-  describe('#queryJob', () => {
-    it('returns false if the job is not funded', async () => {
-      assert.isFalse(await registry.queryJob.call(jobId))
+  describe('#checkForUpkeep', () => {
+    it('returns false if the upkeep is not funded', async () => {
+      assert.isFalse(await registry.checkForUpkeep.call(upkeepId))
     })
 
-    context('when the job is funded', () => {
+    context('when the upkeep is funded', () => {
       beforeEach(async () => {
         await linkToken.approve(registry.address, ether('100'), { from: keeper1 })
-        await registry.addFunds(jobId, ether('100'), { from: keeper1 })
+        await registry.addFunds(upkeepId, ether('100'), { from: keeper1 })
       })
 
       it('returns false if the target cannot execute', async () => {
         const dummyResponse = await dummy.checkForUpkeep.call("0x")
         assert.isFalse(dummyResponse.callable)
-        assert.isFalse(await registry.queryJob.call(jobId))
+        assert.isFalse(await registry.checkForUpkeep.call(upkeepId))
       })
 
       it('returns true if the target can execute', async () => {
         await dummy.setCanExecute(true)
         const dummyResponse = await dummy.checkForUpkeep.call("0x")
         assert.isTrue(dummyResponse.callable)
-        assert.isTrue(await registry.queryJob.call(jobId))
+        assert.isTrue(await registry.checkForUpkeep.call(upkeepId))
       })
     })
   })
