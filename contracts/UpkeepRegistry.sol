@@ -45,7 +45,7 @@ contract UpkeepRegistry is Owned {
     address admin,
     address[] keepers
   );
-  event AddedFunds(
+  event FundsAdded(
     uint256 indexed id,
     uint256 amount
   );
@@ -57,7 +57,7 @@ contract UpkeepRegistry is Owned {
   event UpkeepDeregistered(
     uint256 indexed id
   );
-  event WithdrewFunds(
+  event FundsWithdrawn(
     uint256 indexed id,
     uint256 amount,
     address to
@@ -207,7 +207,7 @@ contract UpkeepRegistry is Owned {
   {
     registrations[id].balance = uint96(uint256(registrations[id].balance).add(amount));
     LINK.transferFrom(msg.sender, address(this), amount);
-    emit AddedFunds(id, amount);
+    emit FundsAdded(id, amount);
   }
 
   function withdrawFunds(
@@ -221,7 +221,7 @@ contract UpkeepRegistry is Owned {
 
     registrations[id].balance = uint96(uint256(registrations[id].balance).sub(amount));
     LINK.transfer(to, amount);
-    emit WithdrewFunds(id, amount, to);
+    emit FundsWithdrawn(id, amount, to);
   }
 
   function keepersFor(
