@@ -11,6 +11,7 @@ contract('UpkeepRegistry', (accounts) => {
   const keeper2 = accounts[2]
   const keeper3 = accounts[3]
   const nonkeeper = accounts[4]
+  const admin = accounts[5]
   const keepers = [keeper1, keeper2, keeper3]
   const linkEth = new BN('30000000000000000')
   const gasWei = new BN('100000000000')
@@ -39,6 +40,7 @@ contract('UpkeepRegistry', (accounts) => {
     const { receipt } = await registry.registerUpkeep(
       mock.address,
       executeGas,
+      admin,
       keepers,
       emptyBytes,
       { from: owner }
@@ -52,6 +54,7 @@ contract('UpkeepRegistry', (accounts) => {
         registry.registerUpkeep(
           constants.ZERO_ADDRESS,
           executeGas,
+          admin,
           keepers,
           emptyBytes,
           { from: owner }
@@ -65,6 +68,7 @@ contract('UpkeepRegistry', (accounts) => {
         registry.registerUpkeep(
           mock.address,
           executeGas,
+          admin,
           [],
           emptyBytes,
           { from: owner }
@@ -78,6 +82,7 @@ contract('UpkeepRegistry', (accounts) => {
         registry.registerUpkeep(
           constants.ZERO_ADDRESS,
           executeGas,
+          admin,
           keepers,
           emptyBytes,
           { from: owner }
@@ -92,6 +97,7 @@ contract('UpkeepRegistry', (accounts) => {
         registry.registerUpkeep(
           reverter.address,
           executeGas,
+          admin,
           keepers,
           emptyBytes,
           { from: owner }
@@ -106,6 +112,7 @@ contract('UpkeepRegistry', (accounts) => {
         registry.registerUpkeep(
           reverter.address,
           executeGas,
+          admin,
           keepers,
           emptyBytes,
           { from: keeper1 }
@@ -118,6 +125,7 @@ contract('UpkeepRegistry', (accounts) => {
       const { receipt } = await registry.registerUpkeep(
         mock.address,
         executeGas,
+        admin,
         keepers,
         emptyBytes,
         { from: owner }
@@ -256,12 +264,12 @@ contract('UpkeepRegistry', (accounts) => {
         let mockResponse = await mock.checkForUpkeep.call("0x")
         assert.isTrue(mockResponse.callable)
         const balanceBefore = await linkToken.balanceOf(keeper1)
-        const tx = await registry.performUpkeep(id, "0x", { from: keeper1, gas: extraGas })
+        const tx = await registry.performUpkeep(id, "0x2a", { from: keeper1, gas: extraGas })
         const balanceAfter = await linkToken.balanceOf(keeper1)
         assert.isTrue(balanceAfter.gt(balanceBefore))
         await expectEvent.inTransaction(tx.tx, UpkeepRegistry, 'UpkeepPerformed', {
-          target: mock.address,
-          success: true
+          success: true,
+          performData: "0x2a"
         })
         mockResponse = await mock.checkForUpkeep.call("0x")
         assert.isFalse(mockResponse.callable)
@@ -280,6 +288,7 @@ contract('UpkeepRegistry', (accounts) => {
         const { receipt } = await registry.registerUpkeep(
           mock.address,
           executeGas,
+          admin,
           keepers,
           emptyBytes,
           { from: owner }

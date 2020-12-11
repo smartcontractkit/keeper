@@ -26,6 +26,8 @@ contract UpkeepRegistry is Owned {
     address target;
     uint32 executeGas;
     uint96 balance;
+    address admin;
+    bool valid;
     bytes checkData;
     address[] keepers;
     mapping(address => bool) isKeeper;
@@ -34,6 +36,7 @@ contract UpkeepRegistry is Owned {
   event UpkeepRegistered(
     uint256 indexed id,
     uint32 executeGas,
+    address admin,
     address[] keepers
   );
   event AddedFunds(
@@ -42,8 +45,8 @@ contract UpkeepRegistry is Owned {
   );
   event UpkeepPerformed(
     uint256 indexed id,
-    address indexed target,
-    bool success
+    bool indexed success,
+    bytes performData
   );
 
   constructor(
@@ -61,6 +64,7 @@ contract UpkeepRegistry is Owned {
   function registerUpkeep(
     address target,
     uint32 gasLimit,
+    address admin,
     address[] calldata keepers,
     bytes calldata queryData
   )
@@ -77,6 +81,8 @@ contract UpkeepRegistry is Owned {
       target: target,
       executeGas: gasLimit,
       balance: 0,
+      admin: admin,
+      valid: true,
       keepers: keepers,
       checkData: queryData
     });
@@ -85,7 +91,7 @@ contract UpkeepRegistry is Owned {
     for (uint256 i = 0; i<keepers.length; i++) {
       registrations[id].isKeeper[keepers[i]] = true;
     }
-    emit UpkeepRegistered(id, gasLimit, keepers);
+    emit UpkeepRegistered(id, gasLimit, admin, keepers);
   }
 
   function checkForUpkeep(
@@ -116,7 +122,7 @@ contract UpkeepRegistry is Owned {
   function tryUpkeep(
     address sender,
     uint256 id,
-    bytes calldata peformData
+    bytes calldata performData
   )
     external
     validateRegistration(id)
@@ -130,14 +136,14 @@ contract UpkeepRegistry is Owned {
     uint256 payment = getPaymentAmount(id);
     require(s_registration.balance >= payment, "!executable");
 
-    bytes memory toCall = abi.encodeWithSelector(PERFORM_SELECTOR, peformData);
+    bytes memory toCall = abi.encodeWithSelector(PERFORM_SELECTOR, performData);
     (success,) = s_registration.target.call{gas: s_registration.executeGas}(toCall);
     require(success, "upkeep failed");
   }
 
   function performUpkeep(
     uint256 id,
-    bytes calldata peformData
+    bytes calldata performData
   )
     external
     validateRegistration(id)
@@ -151,11 +157,11 @@ contract UpkeepRegistry is Owned {
     s_registration.balance = uint96(uint256(registration.balance).sub(payment));
 
     require(gasleft() > registration.executeGas, "!gasleft");
-    bytes memory toCall = abi.encodeWithSelector(PERFORM_SELECTOR, peformData);
+    bytes memory toCall = abi.encodeWithSelector(PERFORM_SELECTOR, performData);
     (bool success,) = registration.target.call{gas: registration.executeGas}(toCall);
 
     LINK.transfer(msg.sender, payment);
-    emit UpkeepPerformed(id, registration.target, success);
+    emit UpkeepPerformed(id, success, performData);
   }
 
   function addFunds(
@@ -213,7 +219,7 @@ contract UpkeepRegistry is Owned {
   modifier validateRegistration(
     uint256 id
   ) {
-    require(registrations[id].target != address(0), "invalid upkeep id");
+    require(registrations[id].valid, "invalid upkeep id");
     _;
   }
 
