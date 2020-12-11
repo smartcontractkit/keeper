@@ -48,6 +48,9 @@ contract UpkeepRegistry is Owned {
     bool indexed success,
     bytes performData
   );
+  event UpkeepDeregistered(
+    uint256 indexed id
+  );
   event WithdrewFunds(
     uint256 indexed id,
     uint256 amount,
@@ -97,6 +100,18 @@ contract UpkeepRegistry is Owned {
       registrations[id].isKeeper[keepers[i]] = true;
     }
     emit UpkeepRegistered(id, gasLimit, admin, keepers);
+  }
+
+  function deregisterUpkeep(
+    uint256 id
+  )
+    external
+    onlyOwner()
+    validateRegistration(id)
+  {
+    registrations[id].valid = false;
+
+    emit UpkeepDeregistered(id);
   }
 
   function checkForUpkeep(

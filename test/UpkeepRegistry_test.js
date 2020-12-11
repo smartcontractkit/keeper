@@ -141,6 +141,7 @@ contract('UpkeepRegistry', (accounts) => {
       assert.equal(mock.address, registration.target)
       assert.equal(0, registration.balance)
       assert.equal(emptyBytes, registration.checkData)
+      assert.isTrue(registration.valid)
       assert.deepEqual(keepers, await registry.keepersFor(id))
     })
   })
@@ -310,6 +311,17 @@ contract('UpkeepRegistry', (accounts) => {
           'only keepers'
         )
       })
+
+      it('reverts if the upkeep has been deregistered', async () => {
+        await mock.setCanExecute(true)
+
+        await registry.deregisterUpkeep(id, { from: owner })
+
+        await expectRevert(
+          registry.performUpkeep(id, "0x", { from: keeper1 }),
+          'invalid upkeep id'
+        )
+      })
     })
   })
 
@@ -350,6 +362,35 @@ contract('UpkeepRegistry', (accounts) => {
 
       registration = await registry.registrations(id)
       assert.equal(0, registration.balance)
+    })
+  })
+
+  describe('#deregisterUpkeep', () => {
+    it('reverts if the ID is not valid', async () => {
+      await expectRevert(
+        registry.deregisterUpkeep(id + 1, { from: owner }),
+        'invalid upkeep id'
+      )
+    })
+
+    it('reverts if called by a non-owner', async () => {
+      await expectRevert(
+        registry.deregisterUpkeep(id + 1, { from: keeper1 }),
+        'Only callable by owner'
+      )
+    })
+
+    it('sets the registration to invalid', async () => {
+      await registry.deregisterUpkeep(id, { from: owner })
+
+      const registration = await registry.registrations(id)
+      assert.isFalse(registration.valid)
+    })
+
+    it('emits an event', async () => {
+      const { receipt } = await registry.deregisterUpkeep(id, { from: owner })
+
+      expectEvent(receipt, 'UpkeepDeregistered', { id: id })
     })
   })
 })
