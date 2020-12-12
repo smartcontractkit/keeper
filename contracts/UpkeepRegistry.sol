@@ -17,6 +17,7 @@ contract UpkeepRegistry is Owned {
   bytes4 constant private CHECK_SELECTOR = UpkeptInterface.checkForUpkeep.selector;
   bytes4 constant private PERFORM_SELECTOR = UpkeptInterface.performUpkeep.selector;
   uint256 constant private CALL_GAS_MINIMUM = 2300;
+  uint256 constant private CALL_GAS_MAXIMUM = 2500000;
   address constant private ZERO_ADDRESS = address(0);
 
   IERC20 public immutable LINK;
@@ -25,9 +26,9 @@ contract UpkeepRegistry is Owned {
 
   uint256 public registrationCount;
   uint256[] private s_deregistered;
+  address[] private s_keeperList;
   mapping(uint256 => Registration) public registrations;
   mapping(address => KeeperInfo) private s_keeperInfo;
-  address[] private s_keeperList;
   mapping(address => address) private s_proposedPayee;
 
   struct Registration {
@@ -164,7 +165,8 @@ contract UpkeepRegistry is Owned {
     onlyOwner()
   {
     require(target.isContract(), "target is not a contract");
-    require(gasLimit > CALL_GAS_MINIMUM, "below minimum gas");
+    require(gasLimit > CALL_GAS_MINIMUM, "min gas is 2300");
+    require(gasLimit <= CALL_GAS_MAXIMUM, "max gas is 2500000");
 
     uint256 id = registrationCount;
     registrations[id] = Registration({

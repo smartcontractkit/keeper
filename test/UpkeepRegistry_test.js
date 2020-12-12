@@ -111,19 +111,6 @@ contract('UpkeepRegistry', (accounts) => {
       )
     })
 
-    it('reverts if the target is not a contract', async () => {
-      await expectRevert(
-        registry.registerUpkeep(
-          zeroAddress,
-          executeGas,
-          admin,
-          emptyBytes,
-          { from: owner }
-        ),
-        'target is not a contract'
-      )
-    })
-
     it('reverts if called by a non-owner', async () => {
       const reverter = await UpkeptReverter.new()
       await expectRevert(
@@ -135,6 +122,34 @@ contract('UpkeepRegistry', (accounts) => {
           { from: keeper1 }
         ),
         'Only callable by owner'
+      )
+    })
+
+    it('reverts if execute gas is too low', async () => {
+      await expectRevert(
+        registry.registerUpkeep(
+          mock.address,
+          2299,
+          admin,
+          emptyBytes,
+          { from: owner }
+        ),
+        'min gas is 2300'
+      )
+    })
+
+
+    it('reverts if execute gas is too high', async () => {
+      const reverter = await UpkeptReverter.new()
+      await expectRevert(
+        registry.registerUpkeep(
+          mock.address,
+          2500001,
+          admin,
+          emptyBytes,
+          { from: owner }
+        ),
+        'max gas is 2500000'
       )
     })
 
