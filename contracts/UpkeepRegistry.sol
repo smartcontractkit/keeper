@@ -32,6 +32,8 @@ contract UpkeepRegistry is Owned {
   mapping(uint256 => Registration) public registrations;
   mapping(address => KeeperInfo) private s_keeperInfo;
   mapping(address => address) private s_proposedPayee;
+  uint24 private s_paymentPremiumPPT;
+  uint24 private s_checkFrequencyBlocks;
 
   struct Registration {
     address target;
@@ -94,17 +96,51 @@ contract UpkeepRegistry is Owned {
     address indexed from,
     address indexed to
   );
+  event ConfigUpdated(
+    uint24 paymentPremiumPPT,
+    uint24 checkFrequencyBlocks
+  );
 
   constructor(
     address link,
     address linkEth,
-    address fastGas
+    address fastGas,
+    uint24 paymentPremiumPPT,
+    uint24 checkFrequencyBlocks
   )
     public
   {
     LINK = IERC20(link);
     LINKETH = AggregatorInterface(linkEth);
     FASTGAS = AggregatorInterface(fastGas);
+
+    setConfig(paymentPremiumPPT, checkFrequencyBlocks);
+  }
+
+  function setConfig(
+    uint24 paymentPremiumPPT,
+    uint24 checkFrequencyBlocks
+  )
+    public
+  {
+    s_paymentPremiumPPT = paymentPremiumPPT;
+    s_checkFrequencyBlocks = checkFrequencyBlocks;
+
+    ConfigUpdated(paymentPremiumPPT, checkFrequencyBlocks);
+  }
+
+  function config()
+    external
+    view
+    returns (
+      uint24 paymentPremiumPPT,
+      uint24 checkFrequencyBlocks
+    )
+  {
+    return (
+      s_paymentPremiumPPT,
+      s_checkFrequencyBlocks
+    );
   }
 
   function setKeepers(

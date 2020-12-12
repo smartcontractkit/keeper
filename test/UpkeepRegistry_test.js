@@ -20,6 +20,8 @@ contract('UpkeepRegistry', (accounts) => {
   const linkEth = new BN('30000000000000000')
   const gasWei = new BN('100000000000')
   const executeGas = new BN('100000')
+  const paymentPremiumPPT = new BN('25000')
+  const checkFrequencyBlocks = new BN(3)
   const emptyBytes = '0x00'
   const zeroAddress = constants.ZERO_ADDRESS
   const extraGas = new BN('250000')
@@ -35,6 +37,8 @@ contract('UpkeepRegistry', (accounts) => {
       linkToken.address,
       linkEthFeed.address,
       gasPriceFeed.address,
+      paymentPremiumPPT,
+      checkFrequencyBlocks,
       { from: owner }
     )
     mock = await UpkeptMock.new()
@@ -633,6 +637,31 @@ contract('UpkeepRegistry', (accounts) => {
 
       const info = await registry.keeperInfo(keeper1)
       assert.equal(payee2, info.payee)
+    })
+  })
+
+  describe('#setConfig', () => {
+    const payment = new BN(1)
+    const checks = new BN(2)
+
+    it("updates the config", async () => {
+      const old = await registry.config()
+      assert.isTrue(paymentPremiumPPT.eq(old.paymentPremiumPPT))
+      assert.isTrue(checkFrequencyBlocks.eq(old.checkFrequencyBlocks))
+
+      await registry.setConfig(payment, checks)
+
+      const updated = await registry.config()
+      assert.isTrue(updated.paymentPremiumPPT.eq(payment))
+      assert.isTrue(updated.checkFrequencyBlocks.eq(checks))
+    })
+
+    it("emits an event", async () => {
+      const { receipt } = await registry.setConfig(1, 2)
+      expectEvent(receipt, 'ConfigUpdated', {
+        paymentPremiumPPT: new BN(1),
+        checkFrequencyBlocks: new BN(2)
+      })
     })
   })
 })
