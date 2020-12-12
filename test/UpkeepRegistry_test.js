@@ -2,7 +2,7 @@ const UpkeepRegistry = artifacts.require('UpkeepRegistry')
 const UpkeptMock = artifacts.require('UpkeptMock')
 const UpkeptReverter = artifacts.require('UpkeptReverter')
 const { LinkToken } = require('@chainlink/contracts/truffle/v0.4/LinkToken')
-const { MockV2Aggregator } = require('@chainlink/contracts/truffle/v0.6/MockV2Aggregator')
+const { MockV3Aggregator } = require('@chainlink/contracts/truffle/v0.6/MockV3Aggregator')
 const { BN, constants, ether, expectEvent, expectRevert, time } = require('@openzeppelin/test-helpers')
 
 contract('UpkeepRegistry', (accounts) => {
@@ -17,10 +17,12 @@ contract('UpkeepRegistry', (accounts) => {
   const payee3 = accounts[8]
   const keepers = [keeper1, keeper2, keeper3]
   const payees = [payee1, payee2, payee3]
-  const linkEth = new BN('30000000000000000')
-  const gasWei = new BN('100000000000')
+  const linkEth = new BN(300000000)
+  const gasWei = new BN(100)
+  const linkDivisibility = new BN("1000000000000000000")
   const executeGas = new BN('100000')
   const paymentPremiumPPT = new BN('25000')
+  const paymentPremiumBase = new BN('100000')
   const checkFrequencyBlocks = new BN(3)
   const emptyBytes = '0x00'
   const zeroAddress = constants.ZERO_ADDRESS
@@ -29,10 +31,10 @@ contract('UpkeepRegistry', (accounts) => {
 
   beforeEach(async () => {
     LinkToken.setProvider(web3.currentProvider)
-    MockV2Aggregator.setProvider(web3.currentProvider)
+    MockV3Aggregator.setProvider(web3.currentProvider)
     linkToken = await LinkToken.new({ from: owner })
-    gasPriceFeed = await MockV2Aggregator.new(gasWei, { from: owner })
-    linkEthFeed = await MockV2Aggregator.new(linkEth, { from: owner })
+    gasPriceFeed = await MockV3Aggregator.new(0, gasWei, { from: owner })
+    linkEthFeed = await MockV3Aggregator.new(9, linkEth, { from: owner })
     registry = await UpkeepRegistry.new(
       linkToken.address,
       linkEthFeed.address,
@@ -221,7 +223,15 @@ contract('UpkeepRegistry', (accounts) => {
         const mockResponse = await mock.checkForUpkeep.call("0x")
         assert.isTrue(mockResponse.callable)
         const check = await registry.checkForUpkeep.call(id, {from: zeroAddress})
+
         assert.isTrue(check.canPerform)
+        assert.isTrue(check.gasLimit.eq(executeGas))
+        assert.isTrue(check.linkEth.eq(linkEth))
+        assert.isTrue(check.gasWei.eq(gasWei))
+
+        const base = gasWei.mul(executeGas).mul(linkDivisibility).div(linkEth)
+        const premium = base.mul(paymentPremiumPPT).div(paymentPremiumBase)
+        assert.isTrue(check.maxLinkPayment.eq(base.add(premium)))
       })
 
       it('reverts if executed', async () => {

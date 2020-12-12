@@ -20,6 +20,7 @@ contract UpkeepRegistry is Owned {
   uint256 constant private CALL_GAS_MIN = 2300;
   uint256 constant private CALL_GAS_MAX = 2500000;
   uint256 constant private CANCELATION_DELAY = 50;
+  uint24 constant private PPT_BASE = 100000;
   uint256 constant private LINK_DIVISIBILITY = 1e18;
 
   IERC20 public immutable LINK;
@@ -247,21 +248,26 @@ contract UpkeepRegistry is Owned {
     cannotExecute()
     returns (
       bool canPerform,
-      bytes memory performData
+      bytes memory performData,
+      uint256 maxLinkPayment,
+      uint256 gasLimit,
+      uint256 gasWei,
+      uint256 linkEth
     )
   {
     Registration storage registration = registrations[id];
-    uint256 payment = getPaymentAmount(id);
-    if (registration.balance < payment) {
-      return (false, performData);
+    (maxLinkPayment, gasLimit, gasWei, linkEth) = getPaymentAmounts(id);
+    if (registration.balance < maxLinkPayment) {
+      return (false, performData, 0, 0, 0, 0);
     }
 
     bytes memory toCall = abi.encodeWithSelector(CHECK_SELECTOR, registration.checkData);
     (bool success, bytes memory result) = registration.target.call(toCall);
     if (!success) {
-      return (false, performData);
+      return (false, performData, 0, 0, 0, 0);
     }
-    return abi.decode(result, (bool, bytes));
+    (canPerform, performData) = abi.decode(result, (bool, bytes));
+    return (canPerform, performData, maxLinkPayment, gasLimit, gasWei, linkEth);
   }
 
   function tryUpkeep(
@@ -276,7 +282,7 @@ contract UpkeepRegistry is Owned {
     )
   {
     Registration storage s_registration = registrations[id];
-    uint256 payment = getPaymentAmount(id);
+    (uint256 payment,,,) = getPaymentAmounts(id);
     if (s_registration.balance < payment) {
       return false;
     }
@@ -298,7 +304,7 @@ contract UpkeepRegistry is Owned {
     Registration memory registration = s_registration;
 
     require(s_keeperInfo[msg.sender].active, "only active keepers");
-    uint256 payment = getPaymentAmount(id);
+    (uint256 payment,,,) = getPaymentAmounts(id);
     require(registration.balance >= payment, "!executable");
 
     s_registration.balance = uint96(uint256(registration.balance).sub(payment));
@@ -394,23 +400,27 @@ contract UpkeepRegistry is Owned {
 
   // PRIVATE
 
-  function getPaymentAmount(
+  function getPaymentAmounts(
     uint256 id
   )
     private
     view
     returns (
-      uint256 payment
+      uint256 payment,
+      uint256 gasLimit,
+      uint256 gasWei,
+      uint256 linkEth
     )
   {
-    uint256 gasLimit = uint256(registrations[id].executeGas);
-    uint256 gasPrice = uint256(FASTGAS.latestAnswer());
-    uint256 linkEthPrice = uint256(LINKETH.latestAnswer());
+    gasLimit = uint256(registrations[id].executeGas);
+    gasWei = uint256(FASTGAS.latestAnswer());
+    linkEth = uint256(LINKETH.latestAnswer());
     // Assuming that the total ETH supply is capped by 2**128 Wei, the maximum
     // intermediate value here is on the order of 2**188 and will therefore
     // always fit a uint256.
-    uint256 base = gasPrice.mul(gasLimit).mul(LINK_DIVISIBILITY).div(linkEthPrice);
-    return base.add(base.mul(25).div(100));
+    uint256 base = gasWei.mul(gasLimit).mul(LINK_DIVISIBILITY).div(linkEth);
+    payment = base.add(base.mul(s_paymentPremiumPPT).div(PPT_BASE));
+    return (payment, gasLimit, gasWei, linkEth);
   }
 
   function proposeNewPayee(
