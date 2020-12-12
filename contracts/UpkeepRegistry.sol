@@ -455,9 +455,12 @@ contract UpkeepRegistry is Owned {
     external
   {
     require(s_keeperInfo[keeper].payee == msg.sender, "only callable by payee");
-    s_proposedPayee[keeper] = proposed;
+    require(proposed != msg.sender, "cannot transfer to self");
 
-    emit PayeeshipTransferRequested(keeper, msg.sender, proposed);
+    if (s_proposedPayee[keeper] != proposed) {
+      s_proposedPayee[keeper] = proposed;
+      emit PayeeshipTransferRequested(keeper, msg.sender, proposed);
+    }
   }
 
   function acceptPayeeship(

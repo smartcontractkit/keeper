@@ -657,6 +657,13 @@ contract('UpkeepRegistry', (accounts) => {
       )
     })
 
+    it("reverts when transferring to self", async () => {
+      await expectRevert(
+        registry.transferPayeeship(keeper1, payee1, { from: payee1 }),
+        "cannot transfer to self"
+      )
+    })
+
     it("does not change the payee", async () => {
       await registry.transferPayeeship(keeper1, payee2, { from: payee1 })
 
@@ -673,9 +680,17 @@ contract('UpkeepRegistry', (accounts) => {
         to: payee2,
       })
     })
+
+    it("does not emit an event when called with the same proposal", async () => {
+      await registry.transferPayeeship(keeper1, payee2, { from: payee1 })
+
+      const { receipt } = await registry.transferPayeeship(keeper1, payee2, { from: payee1 })
+
+      assert.equal(0, receipt.logs.length)
+    })
   })
 
-  describe('#transferPayeeship', () => {
+  describe('#acceptPayeeship', () => {
     beforeEach(async () => {
       await registry.transferPayeeship(keeper1, payee2, { from: payee1 })
     })
