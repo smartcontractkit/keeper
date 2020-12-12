@@ -27,6 +27,7 @@ contract UpkeepRegistry is Owned {
   mapping(uint256 => Registration) public registrations;
   mapping(address => KeeperInfo) private s_keeperInfo;
   address[] private s_keeperList;
+  mapping(address => address) private s_proposedPayee;
 
   struct Registration {
     address target;
@@ -74,6 +75,16 @@ contract UpkeepRegistry is Owned {
   );
   event KeeperRemoved(
     address indexed keeper
+  );
+  event NewPayeeProposed(
+    address indexed keeper,
+    address indexed from,
+    address indexed to
+  );
+  event PayeeProposalAccepted(
+    address indexed keeper,
+    address indexed from,
+    address indexed to
   );
 
   constructor(
@@ -308,6 +319,7 @@ contract UpkeepRegistry is Owned {
     return s_deregistered;
   }
 
+  // PRIVATE
 
   function getPaymentAmount(
     uint256 id
@@ -327,6 +339,34 @@ contract UpkeepRegistry is Owned {
     uint256 base = gasPrice.mul(gasLimit).mul(LINK_DIVISIBILITY).div(linkEthPrice);
     return base.add(base.mul(25).div(100));
   }
+
+  function proposeNewPayee(
+    address keeper,
+    address proposed
+  )
+    external
+  {
+    require(s_keeperInfo[keeper].payee == msg.sender, "only callable by payee");
+    s_proposedPayee[keeper] = proposed;
+
+    emit NewPayeeProposed(keeper, msg.sender, proposed);
+  }
+
+  function acceptPayeeProposal(
+    address keeper
+  )
+    external
+  {
+    require(s_proposedPayee[keeper] == msg.sender, "only callable by proposed payee");
+    address past = s_keeperInfo[keeper].payee;
+    s_keeperInfo[keeper].payee = msg.sender;
+    s_proposedPayee[keeper] = ZERO_ADDRESS;
+
+    emit PayeeProposalAccepted(keeper, past, msg.sender);
+  }
+
+
+  // MODIFIERS
 
   modifier validateRegistration(
     uint256 id

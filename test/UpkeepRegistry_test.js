@@ -443,4 +443,60 @@ contract('UpkeepRegistry', (accounts) => {
       assert.deepEqual([id], deregistered)
     })
   })
+
+  describe('#proposeNewPayee', () => {
+    it("reverts when called by anyone but the current payee", async () => {
+      await expectRevert(
+        registry.proposeNewPayee(keeper1, payee2, { from: payee2 }),
+        "only callable by payee"
+      )
+    })
+
+    it("does not change the payee", async () => {
+      await registry.proposeNewPayee(keeper1, payee2, { from: payee1 })
+
+      const info = await registry.getKeeperInfo(keeper1)
+      assert.equal(payee1, info.payee)
+    })
+
+    it("emits an event announcing the new payee", async () => {
+      const { receipt } = await registry.proposeNewPayee(keeper1, payee2, { from: payee1 })
+
+      expectEvent(receipt, 'NewPayeeProposed', {
+        keeper: keeper1,
+        from: payee1,
+        to: payee2,
+      })
+    })
+  })
+
+  describe('#proposeNewPayee', () => {
+    beforeEach(async () => {
+      await registry.proposeNewPayee(keeper1, payee2, { from: payee1 })
+    })
+
+    it("reverts when called by anyone but the proposed payee", async () => {
+      await expectRevert(
+        registry.acceptPayeeProposal(keeper1, { from: payee1 }),
+        "only callable by proposed payee"
+      )
+    })
+
+    it("emits an event announcing the new payee", async () => {
+      const { receipt } = await registry.acceptPayeeProposal(keeper1, { from: payee2 })
+
+      expectEvent(receipt, 'PayeeProposalAccepted', {
+        keeper: keeper1,
+        from: payee1,
+        to: payee2,
+      })
+    })
+
+    it("does change the payee", async () => {
+      await registry.acceptPayeeProposal(keeper1, { from: payee2 })
+
+      const info = await registry.getKeeperInfo(keeper1)
+      assert.equal(payee2, info.payee)
+    })
+  })
 })
