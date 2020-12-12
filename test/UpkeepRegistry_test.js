@@ -12,8 +12,11 @@ contract('UpkeepRegistry', (accounts) => {
   const keeper3 = accounts[3]
   const nonkeeper = accounts[4]
   const admin = accounts[5]
-  const payee = accounts[6]
+  const payee1 = accounts[6]
+  const payee2 = accounts[7]
+  const payee3 = accounts[8]
   const keepers = [keeper1, keeper2, keeper3]
+  const payees = [payee1, payee2, payee3]
   const linkEth = new BN('30000000000000000')
   const gasWei = new BN('100000000000')
   const executeGas = new BN('100000')
@@ -39,6 +42,7 @@ contract('UpkeepRegistry', (accounts) => {
     await linkToken.transfer(keeper2, ether('100'), { from: owner })
     await linkToken.transfer(keeper3, ether('100'), { from: owner })
 
+    await registry.setKeepers(keepers, payees, {from: owner})
     const { receipt } = await registry.registerUpkeep(
       mock.address,
       executeGas,
@@ -48,6 +52,50 @@ contract('UpkeepRegistry', (accounts) => {
       { from: owner }
     )
     id = receipt.logs[0].args.id
+  })
+
+  describe('#setKeepers', () => {
+    it('reverts when not called by the owner', async () => {
+      await expectRevert(
+        registry.setKeepers([], [], {from: keeper1}),
+        "Only callable by owner"
+      )
+    })
+
+    it('emits events for every keeper added and removed', async () => {
+      const oldKeepers = [keeper1, keeper2]
+      const oldPayees = [payee1, payee2]
+      await registry.setKeepers(oldKeepers, oldPayees, {from: owner})
+      assert.deepEqual(oldKeepers, await registry.keepers())
+
+      // remove keepers
+      const newKeepers = [keeper2, keeper3]
+      const newPayees = [payee2, payee3]
+      const { receipt } = await registry.setKeepers(newKeepers, newPayees, {from: owner})
+      assert.deepEqual(newKeepers, await registry.keepers())
+
+      expectEvent(receipt, 'KeeperRemoved', { keeper: keeper1 })
+      expectEvent(receipt, 'KeeperRemoved', { keeper: keeper2 })
+      expectEvent(receipt, 'KeeperAdded', { keeper: keeper2, payee: payee2 })
+      expectEvent(receipt, 'KeeperAdded', { keeper: keeper3, payee: payee3 })
+    })
+
+    it('updates the keeper to inactive when removed', async () => {
+      await registry.setKeepers(keepers, payees, {from: owner})
+      await registry.setKeepers([keeper1], [payee1], {from: owner})
+      const added = await registry.getKeeperInfo(keeper1)
+      assert.isTrue(added.active)
+      const removed = await registry.getKeeperInfo(keeper2)
+      assert.isFalse(removed.active)
+    })
+
+    it('reverts if the owner changes the payee', async () => {
+      await registry.setKeepers(keepers, payees, {from: owner})
+      await expectRevert(
+        registry.setKeepers(keepers, [payee1, payee2, owner], {from: owner}),
+        "cannot change payee"
+      )
+    })
   })
 
   describe('#registerUpkeep', () => {
@@ -325,31 +373,31 @@ contract('UpkeepRegistry', (accounts) => {
 
     it('reverts if called by anyone but the admin', async () => {
       await expectRevert(
-        registry.withdrawFunds(id + 1, ether('1'), payee, { from: owner }),
+        registry.withdrawFunds(id + 1, ether('1'), payee1, { from: owner }),
         'only callable by admin'
       )
     })
 
     it('reverts if called with more than available balance', async () => {
       await expectRevert(
-        registry.withdrawFunds(id, ether('2'), payee, { from: admin }),
+        registry.withdrawFunds(id, ether('2'), payee1, { from: admin }),
         'SafeMath: subtraction overflow'
       )
     })
 
     it('moves the funds out and updates the balance', async () => {
-      const payeeBefore = await linkToken.balanceOf(payee)
+      const payee1Before = await linkToken.balanceOf(payee1)
       const registryBefore = await linkToken.balanceOf(registry.address)
 
       let registration = await registry.registrations(id)
       assert.isTrue(ether('1').eq(registration.balance))
 
-      await registry.withdrawFunds(id, ether('1'), payee, { from: admin })
+      await registry.withdrawFunds(id, ether('1'), payee1, { from: admin })
 
-      const payeeAfter = await linkToken.balanceOf(payee)
+      const payee1After = await linkToken.balanceOf(payee1)
       const registryAfter = await linkToken.balanceOf(registry.address)
 
-      assert.isTrue(payeeBefore.add(ether('1')).eq(payeeAfter))
+      assert.isTrue(payee1Before.add(ether('1')).eq(payee1After))
       assert.isTrue(registryBefore.sub(ether('1')).eq(registryAfter))
 
       registration = await registry.registrations(id)

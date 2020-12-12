@@ -20,9 +20,13 @@ contract UpkeepRegistry is Owned {
   bytes4 constant private CHECK_SELECTOR = UpkeptInterface.checkForUpkeep.selector;
   bytes4 constant private PERFORM_SELECTOR = UpkeptInterface.performUpkeep.selector;
   uint256 constant private CALL_GAS_MINIMUM = 2300;
+  address constant private ZERO_ADDRESS = address(0);
+
   uint256 public registrationCount;
   uint256[] private s_deregistered;
   mapping(uint256 => Registration) public registrations;
+  mapping(address => KeeperInfo) private s_keeperInfo;
+  address[] private s_keeperList;
 
   struct Registration {
     address target;
@@ -33,6 +37,12 @@ contract UpkeepRegistry is Owned {
     bytes checkData;
     address[] keepers;
     mapping(address => bool) isKeeper;
+  }
+
+  struct KeeperInfo {
+    address payee;
+    uint96 balance;
+    bool active;
   }
 
   event UpkeepRegistered(
@@ -58,6 +68,13 @@ contract UpkeepRegistry is Owned {
     uint256 amount,
     address to
   );
+  event KeeperAdded(
+    address indexed keeper,
+    address payee
+  );
+  event KeeperRemoved(
+    address indexed keeper
+  );
 
   constructor(
     address link,
@@ -69,6 +86,57 @@ contract UpkeepRegistry is Owned {
     LINK = IERC20(link);
     LINKETH = AggregatorInterface(linkEth);
     FASTGAS = AggregatorInterface(fastGas);
+  }
+
+  function setKeepers(
+    address[] calldata keepers,
+    address[] calldata payees
+  )
+    external
+    onlyOwner()
+  {
+    for (uint256 i = 0; i < s_keeperList.length; i++) {
+      address keeper = s_keeperList[i];
+      s_keeperInfo[keeper].active = false;
+      emit KeeperRemoved(keeper);
+    }
+    for (uint256 i = 0; i < keepers.length; i++) {
+      address keeper = keepers[i];
+      KeeperInfo storage s_keeper = s_keeperInfo[keeper];
+      address old = s_keeper.payee;
+      address newPayee = payees[i];
+      require(old == ZERO_ADDRESS || old == newPayee, "cannot change payee");
+      s_keeper.payee = newPayee;
+      s_keeper.active = true;
+
+      emit KeeperAdded(keeper, newPayee);
+    }
+    s_keeperList = keepers;
+  }
+
+  function keepers()
+    external
+    view
+    returns (
+      address[] memory
+    )
+  {
+    return s_keeperList;
+  }
+
+  function getKeeperInfo(
+    address query
+  )
+    external
+    view
+    returns (
+      address payee,
+      bool active,
+      uint96 balance
+    )
+  {
+    KeeperInfo memory keeper = s_keeperInfo[query];
+    return (keeper.payee, keeper.active, keeper.balance);
   }
 
   function registerUpkeep(
@@ -269,7 +337,7 @@ contract UpkeepRegistry is Owned {
 
   modifier cannotExecute()
   {
-    require(msg.sender == address(0), "only for reading");
+    require(msg.sender == ZERO_ADDRESS, "only for reading");
     _;
   }
 
