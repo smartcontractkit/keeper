@@ -13,19 +13,21 @@ contract UpkeepRegistry is Owned {
   using SafeERC20 for IERC20;
   using SafeMath for uint256;
 
-  uint256 constant private LINK_DIVISIBILITY = 1e18;
+  address constant private ZERO_ADDRESS = address(0);
   bytes4 constant private CHECK_SELECTOR = UpkeptInterface.checkForUpkeep.selector;
   bytes4 constant private PERFORM_SELECTOR = UpkeptInterface.performUpkeep.selector;
-  uint256 constant private CALL_GAS_MINIMUM = 2300;
-  uint256 constant private CALL_GAS_MAXIMUM = 2500000;
-  address constant private ZERO_ADDRESS = address(0);
+  uint64 constant private UINT64_MAX = 2**64 - 1;
+  uint256 constant private CALL_GAS_MIN = 2300;
+  uint256 constant private CALL_GAS_MAX = 2500000;
+  uint256 constant private CANCELATION_DELAY = 50;
+  uint256 constant private LINK_DIVISIBILITY = 1e18;
 
   IERC20 public immutable LINK;
   AggregatorInterface public immutable LINKETH;
   AggregatorInterface public immutable FASTGAS;
 
   uint256 public registrationCount;
-  uint256[] private s_deregistered;
+  uint256[] private s_canceledRegistrations;
   address[] private s_keeperList;
   mapping(uint256 => Registration) public registrations;
   mapping(address => KeeperInfo) private s_keeperInfo;
@@ -36,7 +38,7 @@ contract UpkeepRegistry is Owned {
     uint32 executeGas;
     uint96 balance;
     address admin;
-    bool valid;
+    uint64 validUntilHeight;
     bytes checkData;
   }
 
@@ -60,8 +62,9 @@ contract UpkeepRegistry is Owned {
     bool indexed success,
     bytes performData
   );
-  event UpkeepDeregistered(
-    uint256 indexed id
+  event RegistrationCanceled(
+    uint256 indexed id,
+    uint64 indexed atBlockHeight
   );
   event FundsWithdrawn(
     uint256 indexed id,
@@ -165,8 +168,8 @@ contract UpkeepRegistry is Owned {
     onlyOwner()
   {
     require(target.isContract(), "target is not a contract");
-    require(gasLimit > CALL_GAS_MINIMUM, "min gas is 2300");
-    require(gasLimit <= CALL_GAS_MAXIMUM, "max gas is 2500000");
+    require(gasLimit > CALL_GAS_MIN, "min gas is 2300");
+    require(gasLimit <= CALL_GAS_MAX, "max gas is 2500000");
 
     uint256 id = registrationCount;
     registrations[id] = Registration({
@@ -174,7 +177,7 @@ contract UpkeepRegistry is Owned {
       executeGas: gasLimit,
       balance: 0,
       admin: admin,
-      valid: true,
+      validUntilHeight: UINT64_MAX,
       checkData: queryData
     });
     registrationCount++;
@@ -182,17 +185,23 @@ contract UpkeepRegistry is Owned {
     emit UpkeepRegistered(id, gasLimit, admin);
   }
 
-  function deregisterUpkeep(
+  function cancelRegistration(
     uint256 id
   )
     external
-    onlyOwner()
     validateRegistration(id)
   {
-    registrations[id].valid = false;
-    s_deregistered.push(id);
+    bool isOwner = msg.sender == owner;
+    require(isOwner|| msg.sender == registrations[id].admin, "only owner or admin");
 
-    emit UpkeepDeregistered(id);
+    uint256 height = block.number;
+    if (!isOwner) {
+      height = height.add(CANCELATION_DELAY);
+    }
+    registrations[id].validUntilHeight = uint64(height);
+    s_canceledRegistrations.push(id);
+
+    emit RegistrationCanceled(id, uint64(height));
   }
 
   function checkForUpkeep(
@@ -311,14 +320,14 @@ contract UpkeepRegistry is Owned {
     LINK.transfer(to, amount);
   }
 
-  function deregistered()
+  function canceledRegistrations()
     external
     view
     returns (
       uint256[] memory
     )
   {
-    return s_deregistered;
+    return s_canceledRegistrations;
   }
 
   function registration(
@@ -331,7 +340,7 @@ contract UpkeepRegistry is Owned {
       uint32 executeGas,
       uint96 balance,
       address admin,
-      bool valid,
+      uint64 validUntilHeight,
       bytes memory checkData
     )
   {
@@ -341,7 +350,7 @@ contract UpkeepRegistry is Owned {
       reg.executeGas,
       reg.balance,
       reg.admin,
-      reg.valid,
+      reg.validUntilHeight,
       reg.checkData
     );
   }
@@ -398,7 +407,7 @@ contract UpkeepRegistry is Owned {
   modifier validateRegistration(
     uint256 id
   ) {
-    require(registrations[id].valid, "invalid upkeep id");
+    require(registrations[id].validUntilHeight > block.number, "invalid upkeep id");
     _;
   }
 

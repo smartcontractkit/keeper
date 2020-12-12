@@ -170,7 +170,7 @@ contract('UpkeepRegistry', (accounts) => {
       assert.equal(mock.address, registration.target)
       assert.equal(0, registration.balance)
       assert.equal(emptyBytes, registration.checkData)
-      assert.isTrue(registration.valid)
+      assert.equal(0xffffffffffffffff, registration.validUntilHeight)
     })
   })
 
@@ -358,10 +358,10 @@ contract('UpkeepRegistry', (accounts) => {
         )
       })
 
-      it('reverts if the upkeep has been deregistered', async () => {
+      it('reverts if the upkeep has been canceled', async () => {
         await mock.setCanExecute(true)
 
-        await registry.deregisterUpkeep(id, { from: owner })
+        await registry.cancelRegistration(id, { from: owner })
 
         await expectRevert(
           registry.performUpkeep(id, "0x", { from: keeper1 }),
@@ -411,42 +411,100 @@ contract('UpkeepRegistry', (accounts) => {
     })
   })
 
-  describe('#deregisterUpkeep', () => {
+  describe('#cancelRegistration', () => {
     it('reverts if the ID is not valid', async () => {
       await expectRevert(
-        registry.deregisterUpkeep(id + 1, { from: owner }),
+        registry.cancelRegistration(id + 1, { from: owner }),
         'invalid upkeep id'
       )
     })
 
-    it('reverts if called by a non-owner', async () => {
+    it('reverts if called by a non-owner/non-admin', async () => {
       await expectRevert(
-        registry.deregisterUpkeep(id + 1, { from: keeper1 }),
-        'Only callable by owner'
+        registry.cancelRegistration(id, { from: keeper1 }),
+        'only owner or admin'
       )
     })
 
-    it('sets the registration to invalid', async () => {
-      await registry.deregisterUpkeep(id, { from: owner })
+    describe("when called by the owner", async () => {
+      it('sets the registration to invalid immediately', async () => {
+        const { receipt } = await registry.cancelRegistration(id, { from: owner })
 
-      const registration = await registry.registrations(id)
-      assert.isFalse(registration.valid)
+        const registration = await registry.registrations(id)
+        assert.equal(registration.validUntilHeight.toNumber(), receipt.blockNumber)
+      })
+
+      it('emits an event', async () => {
+        const { receipt } = await registry.cancelRegistration(id, { from: owner })
+
+        expectEvent(receipt, 'RegistrationCanceled', {
+          id: id,
+          atBlockHeight: new BN(receipt.blockNumber)
+        })
+      })
+
+      it('updates the canceled registrations list', async () => {
+        let canceled = await registry.canceledRegistrations.call()
+        assert.deepEqual([], canceled)
+
+        await registry.cancelRegistration(id, { from: owner })
+
+        canceled = await registry.canceledRegistrations.call()
+        assert.deepEqual([id], canceled)
+      })
+
+      it('immediately prevents upkeep', async () => {
+        await registry.cancelRegistration(id, { from: owner })
+
+        await expectRevert(
+          registry.performUpkeep(id, "0x", { from: keeper2 }),
+          'invalid upkeep id'
+        )
+      })
     })
 
-    it('emits an event', async () => {
-      const { receipt } = await registry.deregisterUpkeep(id, { from: owner })
+    describe("when called by the admin", async () => {
+      const delay = 50
 
-      expectEvent(receipt, 'UpkeepDeregistered', { id: id })
-    })
+      it('sets the registration to invalid in 50 blocks', async () => {
+        const { receipt } = await registry.cancelRegistration(id, { from: admin })
+        const registration = await registry.registrations(id)
+        assert.isFalse(registration.validUntilHeight.eq(receipt.blockNumber + 50))
+      })
 
-    it('updates the keeperRegistraions records', async () => {
-      let deregistered = await registry.deregistered.call()
-      assert.deepEqual([], deregistered)
+      it('emits an event', async () => {
+        const { receipt } = await registry.cancelRegistration(id, { from: admin })
+        expectEvent(receipt, 'RegistrationCanceled', {
+          id: id,
+          atBlockHeight: new BN(receipt.blockNumber + delay)
+        })
+      })
 
-      await registry.deregisterUpkeep(id)
+      it('updates the canceled registrations list', async () => {
+        let canceled = await registry.canceledRegistrations.call()
+        assert.deepEqual([], canceled)
 
-      deregistered = await registry.deregistered.call()
-      assert.deepEqual([id], deregistered)
+        await registry.cancelRegistration(id, { from: admin })
+
+        canceled = await registry.canceledRegistrations.call()
+        assert.deepEqual([id], canceled)
+      })
+
+      it('immediately prevents upkeep', async () => {
+        await linkToken.approve(registry.address, ether('100'), { from: owner })
+        await registry.addFunds(id, ether('100'), { from: owner })
+        await registry.cancelRegistration(id, { from: admin })
+        await registry.performUpkeep(id, "0x", { from: keeper2 }) // still works
+
+        for (let i = 0; i < delay; i++) {
+          await time.advanceBlock()
+        }
+
+        await expectRevert(
+          registry.performUpkeep(id, "0x", { from: keeper2 }),
+          'invalid upkeep id'
+        )
+      })
     })
   })
 
