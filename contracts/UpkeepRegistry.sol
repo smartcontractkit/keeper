@@ -22,7 +22,7 @@ contract UpkeepRegistry is Owned {
   uint256 constant private CANCELATION_DELAY = 50;
   uint24 constant private PPT_BASE = 100_000;
   uint256 constant private LINK_DIVISIBILITY = 1e18;
-  uint256 constant private REGISTRY_GAS_OVERHEAD = 60_000;
+  uint256 constant private REGISTRY_GAS_OVERHEAD = 65_000;
 
   IERC20 public immutable LINK;
   AggregatorV3Interface public immutable LINKETH;
@@ -96,12 +96,12 @@ contract UpkeepRegistry is Owned {
     address indexed to,
     address payee
   );
-  event NewPayeeProposed(
+  event PayeeshipTransferRequested(
     address indexed keeper,
     address indexed from,
     address indexed to
   );
-  event PayeeProposalAccepted(
+  event PayeeshipTransferred(
     address indexed keeper,
     address indexed from,
     address indexed to
@@ -274,8 +274,8 @@ contract UpkeepRegistry is Owned {
       return (false, performData, 0, 0, 0, 0);
     }
 
-    bytes memory toCall = abi.encodeWithSelector(CHECK_SELECTOR, registration.checkData);
-    (bool success, bytes memory result) = registration.target.call(toCall);
+    bytes memory callData = abi.encodeWithSelector(CHECK_SELECTOR, registration.checkData);
+    (bool success, bytes memory result) = registration.target.call(callData);
     if (!success) {
       return (false, performData, 0, 0, 0, 0);
     }
@@ -301,8 +301,8 @@ contract UpkeepRegistry is Owned {
       return false;
     }
 
-    bytes memory toCall = abi.encodeWithSelector(PERFORM_SELECTOR, performData);
-    (success,) = s_registration.target.call{gas: gasLimit}(toCall);
+    bytes memory callData = abi.encodeWithSelector(PERFORM_SELECTOR, performData);
+    (success,) = s_registration.target.call{gas: gasLimit}(callData);
 
     return success;
   }
@@ -322,8 +322,8 @@ contract UpkeepRegistry is Owned {
     require(gasleft() > registration.executeGas + REGISTRY_GAS_OVERHEAD, "!gasleft");
 
     uint256  gasUsed = gasleft();
-    bytes memory toCall = abi.encodeWithSelector(PERFORM_SELECTOR, performData);
-    (bool success,) = registration.target.call{gas: gasLimit}(toCall);
+    bytes memory callData = abi.encodeWithSelector(PERFORM_SELECTOR, performData);
+    (bool success,) = registration.target.call{gas: gasLimit}(callData);
     gasUsed = gasUsed - gasleft();
 
     (payment,,) = getPaymentAmounts(gasUsed);
@@ -448,7 +448,7 @@ contract UpkeepRegistry is Owned {
     return (payment, gasWei, linkEth);
   }
 
-  function proposeNewPayee(
+  function transferPayeeship(
     address keeper,
     address proposed
   )
@@ -457,10 +457,10 @@ contract UpkeepRegistry is Owned {
     require(s_keeperInfo[keeper].payee == msg.sender, "only callable by payee");
     s_proposedPayee[keeper] = proposed;
 
-    emit NewPayeeProposed(keeper, msg.sender, proposed);
+    emit PayeeshipTransferRequested(keeper, msg.sender, proposed);
   }
 
-  function acceptPayeeProposal(
+  function acceptPayeeship(
     address keeper
   )
     external
@@ -470,7 +470,7 @@ contract UpkeepRegistry is Owned {
     s_keeperInfo[keeper].payee = msg.sender;
     s_proposedPayee[keeper] = ZERO_ADDRESS;
 
-    emit PayeeProposalAccepted(keeper, past, msg.sender);
+    emit PayeeshipTransferred(keeper, past, msg.sender);
   }
 
 

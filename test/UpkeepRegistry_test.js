@@ -27,7 +27,7 @@ contract('UpkeepRegistry', (accounts) => {
   const emptyBytes = '0x00'
   const zeroAddress = constants.ZERO_ADDRESS
   const extraGas = new BN('250000')
-  const registryGasOverhead = new BN('60000')
+  const registryGasOverhead = new BN('65000')
   const stalenessSeconds = new BN(43820)
   let linkToken, linkEthFeed, gasPriceFeed, registry, mock, id
 
@@ -649,25 +649,25 @@ contract('UpkeepRegistry', (accounts) => {
     })
   })
 
-  describe('#proposeNewPayee', () => {
+  describe('#transferPayeeship', () => {
     it("reverts when called by anyone but the current payee", async () => {
       await expectRevert(
-        registry.proposeNewPayee(keeper1, payee2, { from: payee2 }),
+        registry.transferPayeeship(keeper1, payee2, { from: payee2 }),
         "only callable by payee"
       )
     })
 
     it("does not change the payee", async () => {
-      await registry.proposeNewPayee(keeper1, payee2, { from: payee1 })
+      await registry.transferPayeeship(keeper1, payee2, { from: payee1 })
 
       const info = await registry.keeperInfo(keeper1)
       assert.equal(payee1, info.payee)
     })
 
     it("emits an event announcing the new payee", async () => {
-      const { receipt } = await registry.proposeNewPayee(keeper1, payee2, { from: payee1 })
+      const { receipt } = await registry.transferPayeeship(keeper1, payee2, { from: payee1 })
 
-      expectEvent(receipt, 'NewPayeeProposed', {
+      expectEvent(receipt, 'PayeeshipTransferRequested', {
         keeper: keeper1,
         from: payee1,
         to: payee2,
@@ -675,22 +675,22 @@ contract('UpkeepRegistry', (accounts) => {
     })
   })
 
-  describe('#proposeNewPayee', () => {
+  describe('#transferPayeeship', () => {
     beforeEach(async () => {
-      await registry.proposeNewPayee(keeper1, payee2, { from: payee1 })
+      await registry.transferPayeeship(keeper1, payee2, { from: payee1 })
     })
 
     it("reverts when called by anyone but the proposed payee", async () => {
       await expectRevert(
-        registry.acceptPayeeProposal(keeper1, { from: payee1 }),
+        registry.acceptPayeeship(keeper1, { from: payee1 }),
         "only callable by proposed payee"
       )
     })
 
     it("emits an event announcing the new payee", async () => {
-      const { receipt } = await registry.acceptPayeeProposal(keeper1, { from: payee2 })
+      const { receipt } = await registry.acceptPayeeship(keeper1, { from: payee2 })
 
-      expectEvent(receipt, 'PayeeProposalAccepted', {
+      expectEvent(receipt, 'PayeeshipTransferred', {
         keeper: keeper1,
         from: payee1,
         to: payee2,
@@ -698,7 +698,7 @@ contract('UpkeepRegistry', (accounts) => {
     })
 
     it("does change the payee", async () => {
-      await registry.acceptPayeeProposal(keeper1, { from: payee2 })
+      await registry.acceptPayeeship(keeper1, { from: payee2 })
 
       const info = await registry.keeperInfo(keeper1)
       assert.equal(payee2, info.payee)
