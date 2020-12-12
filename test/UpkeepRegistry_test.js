@@ -28,6 +28,7 @@ contract('UpkeepRegistry', (accounts) => {
   const zeroAddress = constants.ZERO_ADDRESS
   const extraGas = new BN('250000')
   const registryGasOverhead = new BN('60000')
+  const stalenessSeconds = new BN(43820)
   let linkToken, linkEthFeed, gasPriceFeed, registry, mock, id
 
   linkForGas = (upkeepGasSpent) => {
@@ -49,6 +50,7 @@ contract('UpkeepRegistry', (accounts) => {
       gasPriceFeed.address,
       paymentPremiumPPT,
       checkFrequencyBlocks,
+      stalenessSeconds,
       { from: owner }
     )
     mock = await UpkeptMock.new()
@@ -246,6 +248,41 @@ contract('UpkeepRegistry', (accounts) => {
           'only for reading'
         )
       })
+
+      describe.skip("truffle troubles", () => {
+        // Truffle appears to be having trouble with calls that specify they
+        // are from the zero address. If I comment out the modifier that
+        // enforces use of the zero address, the calls that don't use the zero
+        // address pass. I believe these tests are good, but limited by Truffle
+        // at the moment so I'm markig them as skipped.
+        it("reverts if the gas price feed is stale", async () => {
+          const roundId = 99
+          const answer = 42
+          const updatedAt = 946684800
+          const startedAt = 946684799
+          await gasPriceFeed.updateRoundData(roundId, answer, updatedAt, startedAt, {from: owner})
+
+          await expectRevert(
+            registry.checkForUpkeep.call(id),
+            //registry.checkForUpkeep.call(id, {from: zeroAddress}),
+            "stale GAS/ETH data"
+          )
+        })
+
+        it("reverts if the link price feed is stale", async () => {
+          const roundId = 99
+          const answer = 42
+          const updatedAt = 946684800
+          const startedAt = 946684799
+          await linkEthFeed.updateRoundData(roundId, answer, updatedAt, startedAt, {from: owner})
+
+          await expectRevert(
+            registry.checkForUpkeep.call(id),
+            //registry.checkForUpkeep.call(id, {from: zeroAddress}),
+            "stale LINK/ETH data"
+          )
+        })
+      })
     })
   })
 
@@ -360,7 +397,7 @@ contract('UpkeepRegistry', (accounts) => {
         const difference = after.sub(before)
         assert.isTrue(max.gt(totalTx))
         assert.isTrue(totalTx.gt(difference))
-        assert.isTrue(linkForGas(2892).eq(difference)) // likely flaky
+        assert.isTrue(linkForGas(2889).eq(difference)) // likely flaky
       })
 
       it('pays the caller even if the target function fails', async () => {
@@ -671,24 +708,28 @@ contract('UpkeepRegistry', (accounts) => {
   describe('#setConfig', () => {
     const payment = new BN(1)
     const checks = new BN(2)
+    const staleness = new BN(3)
 
     it("updates the config", async () => {
       const old = await registry.config()
       assert.isTrue(paymentPremiumPPT.eq(old.paymentPremiumPPT))
       assert.isTrue(checkFrequencyBlocks.eq(old.checkFrequencyBlocks))
+      assert.isTrue(stalenessSeconds.eq(old.stalenessSeconds))
 
-      await registry.setConfig(payment, checks)
+      await registry.setConfig(payment, checks, staleness)
 
       const updated = await registry.config()
       assert.isTrue(updated.paymentPremiumPPT.eq(payment))
       assert.isTrue(updated.checkFrequencyBlocks.eq(checks))
+      assert.isTrue(updated.stalenessSeconds.eq(staleness))
     })
 
     it("emits an event", async () => {
-      const { receipt } = await registry.setConfig(1, 2)
+      const { receipt } = await registry.setConfig(payment, checks, staleness)
       expectEvent(receipt, 'ConfigUpdated', {
-        paymentPremiumPPT: new BN(1),
-        checkFrequencyBlocks: new BN(2)
+        paymentPremiumPPT: payment,
+        checkFrequencyBlocks: checks,
+        stalenessSeconds: staleness
       })
     })
   })

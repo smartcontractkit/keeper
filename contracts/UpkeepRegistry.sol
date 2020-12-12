@@ -1,6 +1,6 @@
 pragma solidity 0.6.12;
 
-import "@chainlink/contracts/src/v0.6/interfaces/AggregatorInterface.sol";
+import "@chainlink/contracts/src/v0.6/interfaces/AggregatorV3Interface.sol";
 import "@chainlink/contracts/src/v0.6/Owned.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -25,8 +25,8 @@ contract UpkeepRegistry is Owned {
   uint256 constant private REGISTRY_GAS_OVERHEAD = 60000;
 
   IERC20 public immutable LINK;
-  AggregatorInterface public immutable LINKETH;
-  AggregatorInterface public immutable FASTGAS;
+  AggregatorV3Interface public immutable LINKETH;
+  AggregatorV3Interface public immutable FASTGAS;
 
   uint256 public registrationCount;
   uint256[] private s_canceledRegistrations;
@@ -34,8 +34,7 @@ contract UpkeepRegistry is Owned {
   mapping(uint256 => Registration) public registrations;
   mapping(address => KeeperInfo) private s_keeperInfo;
   mapping(address => address) private s_proposedPayee;
-  uint24 private s_paymentPremiumPPT;
-  uint24 private s_checkFrequencyBlocks;
+  Config private s_config;
 
   struct Registration {
     address target;
@@ -52,6 +51,12 @@ contract UpkeepRegistry is Owned {
     bool active;
   }
 
+  struct Config {
+    uint24 paymentPremiumPPT;
+    uint24 checkFrequencyBlocks;
+    uint64 stalenessSeconds;
+  }
+
   event UpkeepRegistered(
     uint256 indexed id,
     uint32 executeGas,
@@ -64,6 +69,7 @@ contract UpkeepRegistry is Owned {
   event UpkeepPerformed(
     uint256 indexed id,
     bool indexed success,
+    uint256 payment,
     bytes performData
   );
   event RegistrationCanceled(
@@ -100,7 +106,8 @@ contract UpkeepRegistry is Owned {
   );
   event ConfigUpdated(
     uint24 paymentPremiumPPT,
-    uint24 checkFrequencyBlocks
+    uint24 checkFrequencyBlocks,
+    uint64 stalenessSeconds
   );
 
   constructor(
@@ -108,27 +115,32 @@ contract UpkeepRegistry is Owned {
     address linkEth,
     address fastGas,
     uint24 paymentPremiumPPT,
-    uint24 checkFrequencyBlocks
+    uint24 checkFrequencyBlocks,
+    uint64 stalenessSeconds
   )
     public
   {
     LINK = IERC20(link);
-    LINKETH = AggregatorInterface(linkEth);
-    FASTGAS = AggregatorInterface(fastGas);
+    LINKETH = AggregatorV3Interface(linkEth);
+    FASTGAS = AggregatorV3Interface(fastGas);
 
-    setConfig(paymentPremiumPPT, checkFrequencyBlocks);
+    setConfig(paymentPremiumPPT, checkFrequencyBlocks, stalenessSeconds);
   }
 
   function setConfig(
     uint24 paymentPremiumPPT,
-    uint24 checkFrequencyBlocks
+    uint24 checkFrequencyBlocks,
+    uint64 stalenessSeconds
   )
     public
   {
-    s_paymentPremiumPPT = paymentPremiumPPT;
-    s_checkFrequencyBlocks = checkFrequencyBlocks;
+    s_config = Config({
+      paymentPremiumPPT: paymentPremiumPPT,
+      checkFrequencyBlocks: checkFrequencyBlocks,
+      stalenessSeconds: stalenessSeconds
+    });
 
-    ConfigUpdated(paymentPremiumPPT, checkFrequencyBlocks);
+    ConfigUpdated(paymentPremiumPPT, checkFrequencyBlocks, stalenessSeconds);
   }
 
   function config()
@@ -136,12 +148,15 @@ contract UpkeepRegistry is Owned {
     view
     returns (
       uint24 paymentPremiumPPT,
-      uint24 checkFrequencyBlocks
+      uint24 checkFrequencyBlocks,
+      uint64 stalenessSeconds
     )
   {
+    Config memory _config = s_config;
     return (
-      s_paymentPremiumPPT,
-      s_checkFrequencyBlocks
+      _config.paymentPremiumPPT,
+      _config.checkFrequencyBlocks,
+      _config.stalenessSeconds
     );
   }
 
@@ -252,8 +267,8 @@ contract UpkeepRegistry is Owned {
       bytes memory performData,
       uint256 maxLinkPayment,
       uint256 gasLimit,
-      uint256 gasWei,
-      uint256 linkEth
+      int256 gasWei,
+      int256 linkEth
     )
   {
     Registration storage registration = registrations[id];
@@ -320,7 +335,7 @@ contract UpkeepRegistry is Owned {
     uint256 newBalance = uint256(s_keeperInfo[msg.sender].balance).add(payment);
     s_keeperInfo[msg.sender].balance = uint96(newBalance);
 
-    emit UpkeepPerformed(id, success, performData);
+    emit UpkeepPerformed(id, success, payment, performData);
   }
 
   function addFunds(
@@ -412,18 +427,28 @@ contract UpkeepRegistry is Owned {
     view
     returns (
       uint256 payment,
-      uint256 gasWei,
-      uint256 linkEth
+      int256 gasWei,
+      int256 linkEth
     )
   {
-    gasWei = uint256(FASTGAS.latestAnswer());
-    linkEth = uint256(LINKETH.latestAnswer());
+    Config memory _config = s_config;
+    uint256 timestamp;
+    (,gasWei,,timestamp,) = FASTGAS.latestRoundData();
+    if (_config.stalenessSeconds > 0) {
+      require(block.timestamp - timestamp < _config.stalenessSeconds, "stale GAS/ETH data");
+    }
+    (,linkEth,,timestamp,) = LINKETH.latestRoundData();
+    if (_config.stalenessSeconds > 0) {
+      require(block.timestamp - timestamp < _config.stalenessSeconds, "stale LINK/ETH data");
+    }
+
     // Assuming that the total ETH supply is capped by 2**128 Wei, the maximum
     // intermediate value here is on the order of 2**188 and will therefore
     // always fit a uint256.
-    uint256 weiForGas = gasWei.mul(gasLimit.add(REGISTRY_GAS_OVERHEAD));
-    uint256 linkForGas = weiForGas.mul(LINK_DIVISIBILITY).div(linkEth);
-    payment = linkForGas.add(linkForGas.mul(s_paymentPremiumPPT).div(PPT_BASE));
+    uint256 weiForGas = uint256(gasWei).mul(gasLimit.add(REGISTRY_GAS_OVERHEAD));
+    uint256 linkForGas = weiForGas.mul(LINK_DIVISIBILITY).div(uint256(linkEth));
+    payment = linkForGas.add(linkForGas.mul(_config.paymentPremiumPPT).div(PPT_BASE));
+
     return (payment, gasWei, linkEth);
   }
 
