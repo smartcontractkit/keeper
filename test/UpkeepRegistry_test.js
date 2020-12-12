@@ -82,9 +82,9 @@ contract('UpkeepRegistry', (accounts) => {
     it('updates the keeper to inactive when removed', async () => {
       await registry.setKeepers(keepers, payees, {from: owner})
       await registry.setKeepers([keeper1], [payee1], {from: owner})
-      const added = await registry.getKeeperInfo(keeper1)
+      const added = await registry.keeperInfo(keeper1)
       assert.isTrue(added.active)
-      const removed = await registry.getKeeperInfo(keeper2)
+      const removed = await registry.keeperInfo(keeper2)
       assert.isFalse(removed.active)
     })
 
@@ -297,21 +297,21 @@ contract('UpkeepRegistry', (accounts) => {
       })
 
       it('updates payment balances', async () => {
-        const keeperBefore = await registry.getKeeperInfo(keeper1)
-        const registrationBalanceBefore = await registry.balanceFor(id)
+        const keeperBefore = await registry.keeperInfo(keeper1)
+        const registrationBefore = await registry.registration(id)
         const keeperLinkBefore = await linkToken.balanceOf(keeper1)
         const registryLinkBefore = await linkToken.balanceOf(registry.address)
 
         //// Do the thing
         const tx = await registry.performUpkeep(id, "0x", { from: keeper1 })
 
-        const keeperAfter = await registry.getKeeperInfo(keeper1)
-        const registrationBalanceAfter = await registry.balanceFor(id)
+        const keeperAfter = await registry.keeperInfo(keeper1)
+        const registrationAfter = await registry.registration(id)
         const keeperLinkAfter = await linkToken.balanceOf(keeper1)
         const registryLinkAfter = await linkToken.balanceOf(registry.address)
 
         assert.isTrue(keeperAfter.balance.gt(keeperBefore.balance))
-        assert.isTrue(registrationBalanceBefore.gt(registrationBalanceAfter))
+        assert.isTrue(registrationBefore.balance.gt(registrationAfter.balance))
         assert.isTrue(keeperLinkAfter.eq(keeperLinkBefore))
         assert.isTrue(registryLinkBefore.eq(registryLinkAfter))
       })
@@ -327,12 +327,12 @@ contract('UpkeepRegistry', (accounts) => {
         const id = receipt.logs[0].args.id
         await linkToken.approve(registry.address, ether('100'), { from: owner })
         await registry.addFunds(id, ether('100'), { from: owner })
-        const keeperBalanceBefore = (await registry.getKeeperInfo(keeper1)).balance
+        const keeperBalanceBefore = (await registry.keeperInfo(keeper1)).balance
 
         // Do the thing
         const tx = await registry.performUpkeep(id, "0x", { from: keeper1 })
 
-        const keeperBalanceAfter = (await registry.getKeeperInfo(keeper1)).balance
+        const keeperBalanceAfter = (await registry.keeperInfo(keeper1)).balance
         assert.isTrue(keeperBalanceAfter.gt(keeperBalanceBefore))
       })
 
@@ -446,7 +446,7 @@ contract('UpkeepRegistry', (accounts) => {
     it("does not change the payee", async () => {
       await registry.proposeNewPayee(keeper1, payee2, { from: payee1 })
 
-      const info = await registry.getKeeperInfo(keeper1)
+      const info = await registry.keeperInfo(keeper1)
       assert.equal(payee1, info.payee)
     })
 
@@ -486,7 +486,7 @@ contract('UpkeepRegistry', (accounts) => {
     it("does change the payee", async () => {
       await registry.acceptPayeeProposal(keeper1, { from: payee2 })
 
-      const info = await registry.getKeeperInfo(keeper1)
+      const info = await registry.keeperInfo(keeper1)
       assert.equal(payee2, info.payee)
     })
   })

@@ -133,7 +133,7 @@ contract UpkeepRegistry is Owned {
     return s_keeperList;
   }
 
-  function getKeeperInfo(
+  function keeperInfo(
     address query
   )
     external
@@ -243,10 +243,11 @@ contract UpkeepRegistry is Owned {
   {
     Registration storage s_registration = registrations[id];
     Registration memory registration = s_registration;
-    require(s_keeperInfo[msg.sender].active, "only active keepers");
 
+    require(s_keeperInfo[msg.sender].active, "only active keepers");
     uint256 payment = getPaymentAmount(id);
     require(registration.balance >= payment, "!executable");
+
     s_registration.balance = uint96(uint256(registration.balance).sub(payment));
     uint256 newBalance = uint256(s_keeperInfo[msg.sender].balance).add(payment);
     s_keeperInfo[msg.sender].balance = uint96(newBalance);
@@ -294,16 +295,29 @@ contract UpkeepRegistry is Owned {
     return s_deregistered;
   }
 
-  function balanceFor(
+  function registration(
     uint256 id
   )
     external
     view
     returns (
-      uint96 balance
+      address target,
+      uint32 executeGas,
+      uint96 balance,
+      address admin,
+      bool valid,
+      bytes memory checkData
     )
   {
-    return registrations[id].balance;
+    Registration memory registration = registrations[id];
+    return (
+      registration.target,
+      registration.executeGas,
+      registration.balance,
+      registration.admin,
+      registration.valid,
+      registration.checkData
+    );
   }
 
   // PRIVATE
