@@ -62,10 +62,6 @@ contract UpkeepRegistry is Owned {
     uint32 executeGas,
     address admin
   );
-  event FundsAdded(
-    uint256 indexed id,
-    uint256 amount
-  );
   event UpkeepPerformed(
     uint256 indexed id,
     bool indexed success,
@@ -76,17 +72,23 @@ contract UpkeepRegistry is Owned {
     uint256 indexed id,
     uint64 indexed atBlockHeight
   );
+  event FundsAdded(
+    uint256 indexed id,
+    uint256 amount
+  );
+  event KeepersUpdated(
+    address[] keepers,
+    address[] payees
+  );
+  event ConfigUpdated(
+    uint24 paymentPremiumPPT,
+    uint24 checkFrequencyBlocks,
+    uint64 stalenessSeconds
+  );
   event FundsWithdrawn(
     uint256 indexed id,
     uint256 amount,
     address to
-  );
-  event KeeperAdded(
-    address indexed keeper,
-    address payee
-  );
-  event KeeperRemoved(
-    address indexed keeper
   );
   event PaymentWithdrawn(
     address indexed keeper,
@@ -103,11 +105,6 @@ contract UpkeepRegistry is Owned {
     address indexed keeper,
     address indexed from,
     address indexed to
-  );
-  event ConfigUpdated(
-    uint24 paymentPremiumPPT,
-    uint24 checkFrequencyBlocks,
-    uint64 stalenessSeconds
   );
 
   constructor(
@@ -171,7 +168,6 @@ contract UpkeepRegistry is Owned {
     for (uint256 i = 0; i < s_keeperList.length; i++) {
       address keeper = s_keeperList[i];
       s_keeperInfo[keeper].active = false;
-      emit KeeperRemoved(keeper);
     }
     for (uint256 i = 0; i < keepers.length; i++) {
       address keeper = keepers[i];
@@ -181,10 +177,9 @@ contract UpkeepRegistry is Owned {
       require(oldPayee == ZERO_ADDRESS || oldPayee == newPayee, "cannot change payee");
       s_keeper.payee = newPayee;
       s_keeper.active = true;
-
-      emit KeeperAdded(keeper, newPayee);
     }
     s_keeperList = keepers;
+    emit KeepersUpdated(keepers, payees);
   }
 
   function keepers()

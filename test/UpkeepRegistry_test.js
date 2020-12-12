@@ -89,10 +89,10 @@ contract('UpkeepRegistry', (accounts) => {
       const { receipt } = await registry.setKeepers(newKeepers, newPayees, {from: owner})
       assert.deepEqual(newKeepers, await registry.keepers())
 
-      expectEvent(receipt, 'KeeperRemoved', { keeper: keeper1 })
-      expectEvent(receipt, 'KeeperRemoved', { keeper: keeper2 })
-      expectEvent(receipt, 'KeeperAdded', { keeper: keeper2, payee: payee2 })
-      expectEvent(receipt, 'KeeperAdded', { keeper: keeper3, payee: payee3 })
+      expectEvent(receipt, 'KeepersUpdated', {
+        keepers: newKeepers,
+        payees: newPayees
+      })
     })
 
     it('updates the keeper to inactive when removed', async () => {
