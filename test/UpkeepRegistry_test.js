@@ -280,29 +280,40 @@ contract('UpkeepRegistry', (accounts) => {
         )
       })
 
-      it('executes always for the first caller if the target can execute', async () => {
+      it('executes the data passed to the registry', async () => {
         await mock.setCanExecute(true)
         let mockResponse = await mock.checkForUpkeep.call("0x")
         assert.isTrue(mockResponse.callable)
-        const balanceBefore = await linkToken.balanceOf(keeper1)
-        const tx = await registry.performUpkeep(id, "0x2a", { from: keeper1, gas: extraGas })
-        const balanceAfter = await linkToken.balanceOf(keeper1)
-        assert.isTrue(balanceAfter.gt(balanceBefore))
+
+        const performData = "0xc0ffeec0ffee"
+        const tx = await registry.performUpkeep(id, performData, { from: keeper1, gas: extraGas })
+
         await expectEvent.inTransaction(tx.tx, UpkeepRegistry, 'UpkeepPerformed', {
           success: true,
-          performData: "0x2a"
+          performData: performData
         })
         mockResponse = await mock.checkForUpkeep.call("0x")
-        assert.isFalse(mockResponse.callable)
+        assert.isFalse(mockResponse.callable) // updated contract state
       })
 
-      it('passes the calldata on to the upkept target', async () => {
-        const performData = "0xc0ffeec0ffee"
-        await mock.setCanExecute(true)
-        const tx = await registry.performUpkeep(id, performData, { from: keeper1 })
-        await expectEvent.inTransaction(tx.tx, UpkeptMock, 'UpkeepPerformedWith', {
-          upkeepData: performData
-        })
+      it('updates payment balances', async () => {
+        const keeperBefore = await registry.getKeeperInfo(keeper1)
+        const registrationBalanceBefore = await registry.balanceFor(id)
+        const keeperLinkBefore = await linkToken.balanceOf(keeper1)
+        const registryLinkBefore = await linkToken.balanceOf(registry.address)
+
+        //// Do the thing
+        const tx = await registry.performUpkeep(id, "0x", { from: keeper1 })
+
+        const keeperAfter = await registry.getKeeperInfo(keeper1)
+        const registrationBalanceAfter = await registry.balanceFor(id)
+        const keeperLinkAfter = await linkToken.balanceOf(keeper1)
+        const registryLinkAfter = await linkToken.balanceOf(registry.address)
+
+        assert.isTrue(keeperAfter.balance.gt(keeperBefore.balance))
+        assert.isTrue(registrationBalanceBefore.gt(registrationBalanceAfter))
+        assert.isTrue(keeperLinkAfter.eq(keeperLinkBefore))
+        assert.isTrue(registryLinkBefore.eq(registryLinkAfter))
       })
 
       it('pays the caller even if the target function fails', async () => {
@@ -316,11 +327,13 @@ contract('UpkeepRegistry', (accounts) => {
         const id = receipt.logs[0].args.id
         await linkToken.approve(registry.address, ether('100'), { from: owner })
         await registry.addFunds(id, ether('100'), { from: owner })
-        await mock.setCanExecute(true)
-        const balanceBefore = await linkToken.balanceOf(keeper1)
+        const keeperBalanceBefore = (await registry.getKeeperInfo(keeper1)).balance
+
+        // Do the thing
         const tx = await registry.performUpkeep(id, "0x", { from: keeper1 })
-        const balanceAfter = await linkToken.balanceOf(keeper1)
-        assert.isTrue(balanceAfter.gt(balanceBefore))
+
+        const keeperBalanceAfter = (await registry.getKeeperInfo(keeper1)).balance
+        assert.isTrue(keeperBalanceAfter.gt(keeperBalanceBefore))
       })
 
       it('reverts if the upkeep is called by a non-keeper', async () => {

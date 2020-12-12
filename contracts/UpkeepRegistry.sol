@@ -13,14 +13,15 @@ contract UpkeepRegistry is Owned {
   using SafeERC20 for IERC20;
   using SafeMath for uint256;
 
-  IERC20 public immutable LINK;
-  AggregatorInterface public immutable LINKETH;
-  AggregatorInterface public immutable FASTGAS;
   uint256 constant private LINK_DIVISIBILITY = 1e18;
   bytes4 constant private CHECK_SELECTOR = UpkeptInterface.checkForUpkeep.selector;
   bytes4 constant private PERFORM_SELECTOR = UpkeptInterface.performUpkeep.selector;
   uint256 constant private CALL_GAS_MINIMUM = 2300;
   address constant private ZERO_ADDRESS = address(0);
+
+  IERC20 public immutable LINK;
+  AggregatorInterface public immutable LINKETH;
+  AggregatorInterface public immutable FASTGAS;
 
   uint256 public registrationCount;
   uint256[] private s_deregistered;
@@ -247,12 +248,13 @@ contract UpkeepRegistry is Owned {
     uint256 payment = getPaymentAmount(id);
     require(registration.balance >= payment, "!executable");
     s_registration.balance = uint96(uint256(registration.balance).sub(payment));
+    uint256 newBalance = uint256(s_keeperInfo[msg.sender].balance).add(payment);
+    s_keeperInfo[msg.sender].balance = uint96(newBalance);
 
     require(gasleft() > registration.executeGas, "!gasleft");
     bytes memory toCall = abi.encodeWithSelector(PERFORM_SELECTOR, performData);
     (bool success,) = registration.target.call{gas: registration.executeGas}(toCall);
 
-    LINK.transfer(msg.sender, payment);
     emit UpkeepPerformed(id, success, performData);
   }
 
@@ -290,6 +292,18 @@ contract UpkeepRegistry is Owned {
     )
   {
     return s_deregistered;
+  }
+
+  function balanceFor(
+    uint256 id
+  )
+    external
+    view
+    returns (
+      uint96 balance
+    )
+  {
+    return registrations[id].balance;
   }
 
   // PRIVATE
