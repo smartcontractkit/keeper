@@ -36,8 +36,6 @@ contract UpkeepRegistry is Owned {
     address admin;
     bool valid;
     bytes checkData;
-    address[] keepers;
-    mapping(address => bool) isKeeper;
   }
 
   struct KeeperInfo {
@@ -49,8 +47,7 @@ contract UpkeepRegistry is Owned {
   event UpkeepRegistered(
     uint256 indexed id,
     uint32 executeGas,
-    address admin,
-    address[] keepers
+    address admin
   );
   event FundsAdded(
     uint256 indexed id,
@@ -154,7 +151,6 @@ contract UpkeepRegistry is Owned {
     address target,
     uint32 gasLimit,
     address admin,
-    address[] calldata keepers,
     bytes calldata queryData
   )
     external
@@ -162,7 +158,6 @@ contract UpkeepRegistry is Owned {
   {
     require(target.isContract(), "target is not a contract");
     require(gasLimit > CALL_GAS_MINIMUM, "below minimum gas");
-    require(keepers.length > 0, "minimum of 1 keeper");
 
     uint256 id = registrationCount;
     registrations[id] = Registration({
@@ -171,16 +166,11 @@ contract UpkeepRegistry is Owned {
       balance: 0,
       admin: admin,
       valid: true,
-      keepers: keepers,
       checkData: queryData
     });
     registrationCount++;
 
-    for (uint256 i = 0; i < keepers.length; i++) {
-      address keeper = keepers[i];
-      registrations[id].isKeeper[keeper] = true;
-    }
-    emit UpkeepRegistered(id, gasLimit, admin, keepers);
+    emit UpkeepRegistered(id, gasLimit, admin);
   }
 
   function deregisterUpkeep(
@@ -191,11 +181,6 @@ contract UpkeepRegistry is Owned {
     validateRegistration(id)
   {
     registrations[id].valid = false;
-
-    address[] memory keepers = registrations[id].keepers;
-    for (uint256 i = 0; i < keepers.length; i++) {
-      address keeper = keepers[i];
-    }
     s_deregistered.push(id);
 
     emit UpkeepDeregistered(id);
@@ -257,7 +242,7 @@ contract UpkeepRegistry is Owned {
   {
     Registration storage s_registration = registrations[id];
     Registration memory registration = s_registration;
-    require(s_registration.isKeeper[msg.sender], "only keepers");
+    require(s_keeperInfo[msg.sender].active, "only active keepers");
 
     uint256 payment = getPaymentAmount(id);
     require(registration.balance >= payment, "!executable");
@@ -295,18 +280,6 @@ contract UpkeepRegistry is Owned {
     registrations[id].balance = uint96(uint256(registrations[id].balance).sub(amount));
     LINK.transfer(to, amount);
     emit FundsWithdrawn(id, amount, to);
-  }
-
-  function keepersFor(
-    uint256 id
-  )
-    external
-    view
-    returns (
-      address[] memory
-    )
-  {
-    return registrations[id].keepers;
   }
 
   function deregistered()

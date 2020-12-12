@@ -47,7 +47,6 @@ contract('UpkeepRegistry', (accounts) => {
       mock.address,
       executeGas,
       admin,
-      keepers,
       emptyBytes,
       { from: owner }
     )
@@ -105,25 +104,10 @@ contract('UpkeepRegistry', (accounts) => {
           zeroAddress,
           executeGas,
           admin,
-          keepers,
           emptyBytes,
           { from: owner }
         ),
         'target is not a contract'
-      )
-    })
-
-    it('reverts if 0 keepers are passed', async () => {
-      await expectRevert(
-        registry.registerUpkeep(
-          mock.address,
-          executeGas,
-          admin,
-          [],
-          emptyBytes,
-          { from: owner }
-        ),
-        'minimum of 1 keeper'
       )
     })
 
@@ -133,7 +117,6 @@ contract('UpkeepRegistry', (accounts) => {
           zeroAddress,
           executeGas,
           admin,
-          keepers,
           emptyBytes,
           { from: owner }
         ),
@@ -148,7 +131,6 @@ contract('UpkeepRegistry', (accounts) => {
           reverter.address,
           executeGas,
           admin,
-          keepers,
           emptyBytes,
           { from: keeper1 }
         ),
@@ -161,22 +143,19 @@ contract('UpkeepRegistry', (accounts) => {
         mock.address,
         executeGas,
         admin,
-        keepers,
         emptyBytes,
         { from: owner }
       )
       id = receipt.logs[0].args.id
       expectEvent(receipt, 'UpkeepRegistered', {
         id: id,
-        executeGas: executeGas,
-        keepers: keepers
+        executeGas: executeGas
       })
       const registration = await registry.registrations(id)
       assert.equal(mock.address, registration.target)
       assert.equal(0, registration.balance)
       assert.equal(emptyBytes, registration.checkData)
       assert.isTrue(registration.valid)
-      assert.deepEqual(keepers, await registry.keepersFor(id))
     })
   })
 
@@ -331,7 +310,6 @@ contract('UpkeepRegistry', (accounts) => {
           mock.address,
           executeGas,
           admin,
-          keepers,
           emptyBytes,
           { from: owner }
         )
@@ -348,7 +326,7 @@ contract('UpkeepRegistry', (accounts) => {
       it('reverts if the upkeep is called by a non-keeper', async () => {
         await expectRevert(
           registry.performUpkeep(id, "0x", { from: nonkeeper }),
-          'only keepers'
+          'only active keepers'
         )
       })
 
