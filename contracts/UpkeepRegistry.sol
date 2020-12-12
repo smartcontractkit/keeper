@@ -17,12 +17,12 @@ contract UpkeepRegistry is Owned {
   bytes4 constant private CHECK_SELECTOR = UpkeptInterface.checkForUpkeep.selector;
   bytes4 constant private PERFORM_SELECTOR = UpkeptInterface.performUpkeep.selector;
   uint64 constant private UINT64_MAX = 2**64 - 1;
-  uint256 constant private CALL_GAS_MIN = 2300;
-  uint256 constant private CALL_GAS_MAX = 2500000;
+  uint256 constant private CALL_GAS_MIN = 2_300;
+  uint256 constant private CALL_GAS_MAX = 2_500_000;
   uint256 constant private CANCELATION_DELAY = 50;
-  uint24 constant private PPT_BASE = 100000;
+  uint24 constant private PPT_BASE = 100_000;
   uint256 constant private LINK_DIVISIBILITY = 1e18;
-  uint256 constant private REGISTRY_GAS_OVERHEAD = 60000;
+  uint256 constant private REGISTRY_GAS_OVERHEAD = 60_000;
 
   IERC20 public immutable LINK;
   AggregatorV3Interface public immutable LINKETH;
@@ -175,9 +175,9 @@ contract UpkeepRegistry is Owned {
     for (uint256 i = 0; i < keepers.length; i++) {
       address keeper = keepers[i];
       KeeperInfo storage s_keeper = s_keeperInfo[keeper];
-      address old = s_keeper.payee;
+      address oldPayee = s_keeper.payee;
       address newPayee = payees[i];
-      require(old == ZERO_ADDRESS || old == newPayee, "cannot change payee");
+      require(oldPayee == ZERO_ADDRESS || oldPayee == newPayee, "cannot change payee");
       s_keeper.payee = newPayee;
       s_keeper.active = true;
 
@@ -489,7 +489,7 @@ contract UpkeepRegistry is Owned {
 
   modifier cannotExecute()
   {
-    require(msg.sender == ZERO_ADDRESS, "only for reading");
+    require(msg.sender == ZERO_ADDRESS, "only for simulated execution");
     _;
   }
 
