@@ -303,7 +303,7 @@ contract('UpkeepRegistry', (accounts) => {
         const registryLinkBefore = await linkToken.balanceOf(registry.address)
 
         //// Do the thing
-        const tx = await registry.performUpkeep(id, "0x", { from: keeper1 })
+        await registry.performUpkeep(id, "0x", { from: keeper1 })
 
         const keeperAfter = await registry.keeperInfo(keeper1)
         const registrationAfter = await registry.registration(id)
@@ -432,6 +432,65 @@ contract('UpkeepRegistry', (accounts) => {
 
       deregistered = await registry.deregistered.call()
       assert.deepEqual([id], deregistered)
+    })
+  })
+
+  describe('#withdrawPayment', () => {
+    const amount = 7777777
+
+    beforeEach(async () => {
+      await linkToken.approve(registry.address, ether('100'), { from: owner })
+      await registry.addFunds(id, ether('100'), { from: owner })
+      await registry.performUpkeep(id, "0x", { from: keeper1 })
+    })
+
+    it("reverts if called by anyone but the payee", async () => {
+      await expectRevert(
+        registry.withdrawPayment(keeper1, amount, nonkeeper, { from: payee2 }),
+        "only callable by payee"
+      )
+    })
+
+    it("reverts if called with too large a balance", async () => {
+      const twoLINK = "0x1bc16d674ec80000"
+      await expectRevert(
+        registry.withdrawPayment(keeper1, twoLINK, nonkeeper, { from: payee1 }),
+        "insufficient balance"
+      )
+    })
+
+    it("updates the balances", async () => {
+      const to = nonkeeper
+      const keeperBefore = await registry.keeperInfo(keeper1)
+      const registrationBefore = await registry.registration(id)
+      const toLinkBefore = await linkToken.balanceOf(to)
+      const registryLinkBefore = await linkToken.balanceOf(registry.address)
+
+      //// Do the thing
+      await registry.withdrawPayment(keeper1, amount, nonkeeper, { from: payee1 })
+
+      const keeperAfter = await registry.keeperInfo(keeper1)
+      const registrationAfter = await registry.registration(id)
+      const toLinkAfter = await linkToken.balanceOf(to)
+      const registryLinkAfter = await linkToken.balanceOf(registry.address)
+
+      assert.isTrue(keeperAfter.balance.lt(keeperBefore.balance))
+      assert.isTrue(registrationBefore.balance.eq(registrationAfter.balance))
+      assert.isTrue(toLinkBefore.lt(toLinkAfter))
+      assert.isTrue(registryLinkBefore.gt(registryLinkAfter))
+    })
+
+    it("emits a log announcing the withdrawal", async () => {
+      const { receipt } = await registry.withdrawPayment(
+        keeper1, amount, nonkeeper, { from: payee1 }
+      )
+
+      expectEvent(receipt, 'PaymentWithdrawn', {
+        keeper: keeper1,
+        amount: web3.utils.toBN(amount),
+        to: nonkeeper,
+        payee: payee1,
+      })
     })
   })
 

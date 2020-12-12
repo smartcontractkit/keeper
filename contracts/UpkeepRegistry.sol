@@ -74,6 +74,12 @@ contract UpkeepRegistry is Owned {
   event KeeperRemoved(
     address indexed keeper
   );
+  event PaymentWithdrawn(
+    address indexed keeper,
+    uint256 indexed amount,
+    address indexed to,
+    address payee
+  );
   event NewPayeeProposed(
     address indexed keeper,
     address indexed from,
@@ -281,8 +287,26 @@ contract UpkeepRegistry is Owned {
     require(registrations[id].admin == msg.sender, "only callable by admin");
 
     registrations[id].balance = uint96(uint256(registrations[id].balance).sub(amount));
-    LINK.transfer(to, amount);
     emit FundsWithdrawn(id, amount, to);
+
+    LINK.transfer(to, amount);
+  }
+
+  function withdrawPayment(
+    address from,
+    uint256 amount,
+    address to
+  )
+    external
+  {
+    KeeperInfo memory keeper = s_keeperInfo[from];
+    require(keeper.payee == msg.sender, "only callable by payee");
+    require(keeper.balance >= amount, "insufficient balance");
+
+    s_keeperInfo[from].balance = uint96(uint256(keeper.balance).sub(amount));
+    emit PaymentWithdrawn(from, amount, to, msg.sender);
+
+    LINK.transfer(to, amount);
   }
 
   function deregistered()
@@ -309,14 +333,14 @@ contract UpkeepRegistry is Owned {
       bytes memory checkData
     )
   {
-    Registration memory registration = registrations[id];
+    Registration memory reg = registrations[id];
     return (
-      registration.target,
-      registration.executeGas,
-      registration.balance,
-      registration.admin,
-      registration.valid,
-      registration.checkData
+      reg.target,
+      reg.executeGas,
+      reg.balance,
+      reg.admin,
+      reg.valid,
+      reg.checkData
     );
   }
 
