@@ -384,30 +384,43 @@ contract('UpkeepRegistry', (accounts) => {
       )
     })
 
-    it('reverts if called with more than available balance', async () => {
+    it('reverts if called on an uncanceled registration', async () => {
       await expectRevert(
-        registry.withdrawFunds(id, ether('2'), payee1, { from: admin }),
-        'SafeMath: subtraction overflow'
+        registry.withdrawFunds(id, ether('1'), payee1, { from: admin }),
+        'registration must be canceled'
       )
     })
 
-    it('moves the funds out and updates the balance', async () => {
-      const payee1Before = await linkToken.balanceOf(payee1)
-      const registryBefore = await linkToken.balanceOf(registry.address)
+    describe("after the registration is cancelled", () => {
+      beforeEach(async () => {
+        await registry.cancelRegistration(id, { from: owner })
+      })
 
-      let registration = await registry.registrations(id)
-      assert.isTrue(ether('1').eq(registration.balance))
+      it('reverts if called with more than available balance', async () => {
+        await expectRevert(
+          registry.withdrawFunds(id, ether('2'), payee1, { from: admin }),
+          'SafeMath: subtraction overflow'
+        )
+      })
 
-      await registry.withdrawFunds(id, ether('1'), payee1, { from: admin })
+      it('moves the funds out and updates the balance', async () => {
+        const payee1Before = await linkToken.balanceOf(payee1)
+        const registryBefore = await linkToken.balanceOf(registry.address)
 
-      const payee1After = await linkToken.balanceOf(payee1)
-      const registryAfter = await linkToken.balanceOf(registry.address)
+        let registration = await registry.registrations(id)
+        assert.isTrue(ether('1').eq(registration.balance))
 
-      assert.isTrue(payee1Before.add(ether('1')).eq(payee1After))
-      assert.isTrue(registryBefore.sub(ether('1')).eq(registryAfter))
+        await registry.withdrawFunds(id, ether('1'), payee1, { from: admin })
 
-      registration = await registry.registrations(id)
-      assert.equal(0, registration.balance)
+        const payee1After = await linkToken.balanceOf(payee1)
+        const registryAfter = await linkToken.balanceOf(registry.address)
+
+        assert.isTrue(payee1Before.add(ether('1')).eq(payee1After))
+        assert.isTrue(registryBefore.sub(ether('1')).eq(registryAfter))
+
+        registration = await registry.registrations(id)
+        assert.equal(0, registration.balance)
+      })
     })
   })
 

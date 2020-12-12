@@ -296,6 +296,7 @@ contract UpkeepRegistry is Owned {
     external
   {
     require(registrations[id].admin == msg.sender, "only callable by admin");
+    require(registrations[id].validUntilHeight <= block.number, "registration must be canceled");
 
     registrations[id].balance = uint96(uint256(registrations[id].balance).sub(amount));
     emit FundsWithdrawn(id, amount, to);
