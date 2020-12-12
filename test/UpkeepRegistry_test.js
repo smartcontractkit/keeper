@@ -27,7 +27,15 @@ contract('UpkeepRegistry', (accounts) => {
   const emptyBytes = '0x00'
   const zeroAddress = constants.ZERO_ADDRESS
   const extraGas = new BN('250000')
+  const registryGasOverhead = new BN('60000')
   let linkToken, linkEthFeed, gasPriceFeed, registry, mock, id
+
+  linkForGas = (upkeepGasSpent) => {
+    const gasSpent = registryGasOverhead.add(new BN(upkeepGasSpent))
+    const base = gasWei.mul(gasSpent).mul(linkDivisibility).div(linkEth)
+    const premium = base.mul(paymentPremiumPPT).div(paymentPremiumBase)
+    return base.add(premium)
+  }
 
   beforeEach(async () => {
     LinkToken.setProvider(web3.currentProvider)
@@ -218,7 +226,7 @@ contract('UpkeepRegistry', (accounts) => {
         assert.isFalse(check.canPerform)
       })
 
-      it('returns true if the target can execute', async () => {
+      it('returns true with pricing info if the target can execute', async () => {
         await mock.setCanExecute(true)
         const mockResponse = await mock.checkForUpkeep.call("0x")
         assert.isTrue(mockResponse.callable)
@@ -228,10 +236,7 @@ contract('UpkeepRegistry', (accounts) => {
         assert.isTrue(check.gasLimit.eq(executeGas))
         assert.isTrue(check.linkEth.eq(linkEth))
         assert.isTrue(check.gasWei.eq(gasWei))
-
-        const base = gasWei.mul(executeGas).mul(linkDivisibility).div(linkEth)
-        const premium = base.mul(paymentPremiumPPT).div(paymentPremiumBase)
-        assert.isTrue(check.maxLinkPayment.eq(base.add(premium)))
+        assert.isTrue(check.maxLinkPayment.eq(linkForGas(executeGas)))
       })
 
       it('reverts if executed', async () => {
@@ -317,7 +322,7 @@ contract('UpkeepRegistry', (accounts) => {
         const performData = "0xc0ffeec0ffee"
         const tx = await registry.performUpkeep(id, performData, { from: keeper1, gas: extraGas })
 
-        await expectEvent.inTransaction(tx.tx, UpkeepRegistry, 'UpkeepPerformed', {
+        expectEvent(tx.receipt, 'UpkeepPerformed', {
           success: true,
           performData: performData
         })
@@ -343,6 +348,19 @@ contract('UpkeepRegistry', (accounts) => {
         assert.isTrue(registrationBefore.balance.gt(registrationAfter.balance))
         assert.isTrue(keeperLinkAfter.eq(keeperLinkBefore))
         assert.isTrue(registryLinkBefore.eq(registryLinkAfter))
+      })
+
+      it('only pays for gas used', async () => {
+        const before = (await registry.keeperInfo(keeper1)).balance
+        const { receipt } = await registry.performUpkeep(id, "0x", { from: keeper1 })
+        const after = (await registry.keeperInfo(keeper1)).balance
+
+        const max = linkForGas(executeGas)
+        const totalTx = linkForGas(receipt.gasUsed)
+        const difference = after.sub(before)
+        assert.isTrue(max.gt(totalTx))
+        assert.isTrue(totalTx.gt(difference))
+        assert.isTrue(linkForGas(2892).eq(difference)) // likely flaky
       })
 
       it('pays the caller even if the target function fails', async () => {
