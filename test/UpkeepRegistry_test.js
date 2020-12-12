@@ -182,7 +182,7 @@ contract('UpkeepRegistry', (accounts) => {
         id: id,
         executeGas: executeGas
       })
-      const registration = await registry.registrations(id)
+      const registration = await registry.registration(id)
       assert.equal(mock.address, registration.target)
       assert.equal(0, registration.balance)
       assert.equal(emptyBytes, registration.checkData)
@@ -204,7 +204,7 @@ contract('UpkeepRegistry', (accounts) => {
 
     it('adds to the balance of the registration', async () => {
       await registry.addFunds(id, ether('1'), { from: keeper1 })
-      const registration = await registry.registrations(id)
+      const registration = await registry.registration(id)
       assert.isTrue(ether('1').eq(registration.balance))
     })
   })
@@ -245,7 +245,7 @@ contract('UpkeepRegistry', (accounts) => {
         await mock.setCanExecute(true)
         await expectRevert(
           registry.checkForUpkeep(id),
-          'only for reading'
+          'only for simulated backend'
         )
       })
 
@@ -313,7 +313,7 @@ contract('UpkeepRegistry', (accounts) => {
         it('reverts if executed', async () => {
           await expectRevert(
             registry.tryUpkeep(id, "0x"),
-            'only for reading'
+            'only for simulated backend'
           )
         })
       })
@@ -476,7 +476,7 @@ contract('UpkeepRegistry', (accounts) => {
         const payee1Before = await linkToken.balanceOf(payee1)
         const registryBefore = await linkToken.balanceOf(registry.address)
 
-        let registration = await registry.registrations(id)
+        let registration = await registry.registration(id)
         assert.isTrue(ether('1').eq(registration.balance))
 
         await registry.withdrawFunds(id, ether('1'), payee1, { from: admin })
@@ -487,7 +487,7 @@ contract('UpkeepRegistry', (accounts) => {
         assert.isTrue(payee1Before.add(ether('1')).eq(payee1After))
         assert.isTrue(registryBefore.sub(ether('1')).eq(registryAfter))
 
-        registration = await registry.registrations(id)
+        registration = await registry.registration(id)
         assert.equal(0, registration.balance)
       })
     })
@@ -512,7 +512,7 @@ contract('UpkeepRegistry', (accounts) => {
       it('sets the registration to invalid immediately', async () => {
         const { receipt } = await registry.cancelRegistration(id, { from: owner })
 
-        const registration = await registry.registrations(id)
+        const registration = await registry.registration(id)
         assert.equal(registration.validUntilHeight.toNumber(), receipt.blockNumber)
       })
 
@@ -550,7 +550,7 @@ contract('UpkeepRegistry', (accounts) => {
 
       it('sets the registration to invalid in 50 blocks', async () => {
         const { receipt } = await registry.cancelRegistration(id, { from: admin })
-        const registration = await registry.registrations(id)
+        const registration = await registry.registration(id)
         assert.isFalse(registration.validUntilHeight.eq(receipt.blockNumber + 50))
       })
 
@@ -709,6 +709,13 @@ contract('UpkeepRegistry', (accounts) => {
     const payment = new BN(1)
     const checks = new BN(2)
     const staleness = new BN(3)
+
+    it("reverts when called by anyone but the proposed owner", async () => {
+      await expectRevert(
+        registry.setConfig(payment, checks, staleness, { from: payee1 }),
+        "Only callable by owner"
+      )
+    })
 
     it("updates the config", async () => {
       const old = await registry.config()

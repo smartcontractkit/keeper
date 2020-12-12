@@ -31,7 +31,7 @@ contract UpkeepRegistry is Owned {
   uint256 public registrationCount;
   uint256[] private s_canceledRegistrations;
   address[] private s_keeperList;
-  mapping(uint256 => Registration) public registrations;
+  mapping(uint256 => Registration) private s_registrations;
   mapping(address => KeeperInfo) private s_keeperInfo;
   mapping(address => address) private s_proposedPayee;
   Config private s_config;
@@ -132,6 +132,7 @@ contract UpkeepRegistry is Owned {
     uint24 checkFrequencyBlocks,
     uint64 stalenessSeconds
   )
+    onlyOwner()
     public
   {
     s_config = Config({
@@ -225,7 +226,7 @@ contract UpkeepRegistry is Owned {
     require(gasLimit <= CALL_GAS_MAX, "max gas is 2500000");
 
     uint256 id = registrationCount;
-    registrations[id] = Registration({
+    s_registrations[id] = Registration({
       target: target,
       executeGas: gasLimit,
       balance: 0,
@@ -245,13 +246,13 @@ contract UpkeepRegistry is Owned {
     validateRegistration(id)
   {
     bool isOwner = msg.sender == owner;
-    require(isOwner|| msg.sender == registrations[id].admin, "only owner or admin");
+    require(isOwner|| msg.sender == s_registrations[id].admin, "only owner or admin");
 
     uint256 height = block.number;
     if (!isOwner) {
       height = height.add(CANCELATION_DELAY);
     }
-    registrations[id].validUntilHeight = uint64(height);
+    s_registrations[id].validUntilHeight = uint64(height);
     s_canceledRegistrations.push(id);
 
     emit RegistrationCanceled(id, uint64(height));
@@ -271,7 +272,7 @@ contract UpkeepRegistry is Owned {
       int256 linkEth
     )
   {
-    Registration storage registration = registrations[id];
+    Registration storage registration = s_registrations[id];
     gasLimit = registration.executeGas;
     (maxLinkPayment, gasWei, linkEth) = getPaymentAmounts(gasLimit);
     if (registration.balance < maxLinkPayment) {
@@ -298,7 +299,7 @@ contract UpkeepRegistry is Owned {
       bool success
     )
   {
-    Registration storage s_registration = registrations[id];
+    Registration storage s_registration = s_registrations[id];
     uint256 gasLimit = s_registration.executeGas;
     (uint256 payment,,) = getPaymentAmounts(gasLimit);
     if (s_registration.balance < payment) {
@@ -319,7 +320,7 @@ contract UpkeepRegistry is Owned {
     validateKeeper()
     validateRegistration(id)
   {
-    Registration memory registration = registrations[id];
+    Registration memory registration = s_registrations[id];
     uint256 gasLimit = registration.executeGas;
     (uint256 payment,,) = getPaymentAmounts(gasLimit);
     require(registration.balance >= payment, "!executable");
@@ -331,7 +332,7 @@ contract UpkeepRegistry is Owned {
     gasUsed = gasUsed - gasleft();
 
     (payment,,) = getPaymentAmounts(gasUsed);
-    registrations[id].balance = uint96(uint256(registration.balance).sub(payment));
+    s_registrations[id].balance = uint96(uint256(registration.balance).sub(payment));
     uint256 newBalance = uint256(s_keeperInfo[msg.sender].balance).add(payment);
     s_keeperInfo[msg.sender].balance = uint96(newBalance);
 
@@ -345,7 +346,7 @@ contract UpkeepRegistry is Owned {
     external
     validateRegistration(id)
   {
-    registrations[id].balance = uint96(uint256(registrations[id].balance).add(amount));
+    s_registrations[id].balance = uint96(uint256(s_registrations[id].balance).add(amount));
     LINK.transferFrom(msg.sender, address(this), amount);
     emit FundsAdded(id, amount);
   }
@@ -357,10 +358,10 @@ contract UpkeepRegistry is Owned {
   )
     external
   {
-    require(registrations[id].admin == msg.sender, "only callable by admin");
-    require(registrations[id].validUntilHeight <= block.number, "registration must be canceled");
+    require(s_registrations[id].admin == msg.sender, "only callable by admin");
+    require(s_registrations[id].validUntilHeight <= block.number, "registration must be canceled");
 
-    registrations[id].balance = uint96(uint256(registrations[id].balance).sub(amount));
+    s_registrations[id].balance = uint96(uint256(s_registrations[id].balance).sub(amount));
     emit FundsWithdrawn(id, amount, to);
 
     LINK.transfer(to, amount);
@@ -407,7 +408,7 @@ contract UpkeepRegistry is Owned {
       bytes memory checkData
     )
   {
-    Registration memory reg = registrations[id];
+    Registration memory reg = s_registrations[id];
     return (
       reg.target,
       reg.executeGas,
@@ -483,13 +484,13 @@ contract UpkeepRegistry is Owned {
   modifier validateRegistration(
     uint256 id
   ) {
-    require(registrations[id].validUntilHeight > block.number, "invalid upkeep id");
+    require(s_registrations[id].validUntilHeight > block.number, "invalid upkeep id");
     _;
   }
 
   modifier cannotExecute()
   {
-    require(msg.sender == ZERO_ADDRESS, "only for simulated execution");
+    require(msg.sender == ZERO_ADDRESS, "only for simulated backend");
     _;
   }
 
