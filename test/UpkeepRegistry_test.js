@@ -368,7 +368,8 @@ contract('UpkeepRegistry', (accounts) => {
         const difference = after.sub(before)
         assert.isTrue(max.gt(totalTx))
         assert.isTrue(totalTx.gt(difference))
-        assert.isTrue(linkForGas(2927).eq(difference)) // likely flaky
+        assert.isTrue(linkForGas(2900).lt(difference)) // exact number is flaky
+        assert.isTrue(linkForGas(3000).gt(difference)) // instead test a range
       })
 
       it('pays the caller even if the target function fails', async () => {

@@ -304,7 +304,8 @@ contract UpkeepRegistry is Owned {
   {
     Registration storage registration = s_registrations[id];
     gasLimit = registration.executeGas;
-    (maxLinkPayment, gasWei, linkEth) = getPaymentAmounts(gasLimit);
+    (gasWei, linkEth) = getFeedData();
+    maxLinkPayment = calculatePaymentAmount(gasLimit, gasWei, linkEth);
     if (registration.balance < maxLinkPayment) {
       return (false, performData, 0, 0, 0, 0);
     }
@@ -334,7 +335,8 @@ contract UpkeepRegistry is Owned {
   {
     Registration storage s_registration = s_registrations[id];
     uint256 gasLimit = s_registration.executeGas;
-    (uint256 payment,,) = getPaymentAmounts(gasLimit);
+    (int256 gasWei, int256 linkEth) = getFeedData();
+    uint256 payment = calculatePaymentAmount(gasLimit, gasWei, linkEth);
     if (s_registration.balance < payment) {
       return false;
     }
@@ -355,16 +357,17 @@ contract UpkeepRegistry is Owned {
   {
     Registration memory registration = s_registrations[id];
     uint256 gasLimit = registration.executeGas;
-    (uint256 payment,,) = getPaymentAmounts(gasLimit);
+    (int256 gasWei, int256 linkEth) = getFeedData();
+    uint256 payment = calculatePaymentAmount(gasLimit, gasWei, linkEth);
     require(registration.balance >= payment, "!executable");
-
     uint256  gasUsed = gasleft();
     require(gasUsed > registration.executeGas, "!gasleft");
+
     bytes memory callData = abi.encodeWithSelector(PERFORM_SELECTOR, performData);
     (bool success,) = registration.target.call{gas: gasLimit}(callData);
     gasUsed = gasUsed - gasleft();
 
-    (payment,,) = getPaymentAmounts(gasUsed);
+    payment = calculatePaymentAmount(gasUsed, gasWei, linkEth);
     s_registrations[id].balance = uint96(uint256(registration.balance).sub(payment));
     uint256 newBalance = uint256(s_keeperInfo[msg.sender].balance).add(payment);
     s_keeperInfo[msg.sender].balance = uint96(newBalance);
@@ -489,37 +492,45 @@ contract UpkeepRegistry is Owned {
 
   // PRIVATE
 
-  function getPaymentAmounts(
-    uint256 gasLimit
-  )
+  function getFeedData()
     private
     view
     returns (
-      uint256 payment,
       int256 gasWei,
       int256 linkEth
     )
   {
-    Config memory config = s_config;
+    uint32 stalenessSeconds = s_config.stalenessSeconds;
+    bool staleFallback = stalenessSeconds > 0;
     uint256 timestamp;
     (,gasWei,,timestamp,) = FASTGAS.latestRoundData();
-    bool staleFallback = config.stalenessSeconds > 0;
-    if (staleFallback && config.stalenessSeconds < block.timestamp - timestamp) {
+    if (staleFallback && stalenessSeconds < block.timestamp - timestamp) {
       gasWei = s_fallbackGasPrice;
     }
     (,linkEth,,timestamp,) = LINKETH.latestRoundData();
-    if (staleFallback && config.stalenessSeconds < block.timestamp - timestamp) {
+    if (staleFallback && stalenessSeconds < block.timestamp - timestamp) {
       linkEth = s_fallbackLinkPrice;
     }
+    return (gasWei, linkEth);
+  }
 
+  function calculatePaymentAmount(
+    uint256 gasLimit,
+    int256 gasWei,
+    int256 linkEth
+  )
+    private
+    view
+    returns (
+      uint256 payment
+    )
+  {
     // Assuming that the total ETH supply is capped by 2**128 Wei, the maximum
     // intermediate value here is on the order of 2**188 and will therefore
     // always fit a uint256.
     uint256 weiForGas = uint256(gasWei).mul(gasLimit.add(REGISTRY_GAS_OVERHEAD));
     uint256 linkForGas = weiForGas.mul(LINK_DIVISIBILITY).div(uint256(linkEth));
-    payment = linkForGas.add(linkForGas.mul(config.paymentPremiumPPT).div(PPT_BASE));
-
-    return (payment, gasWei, linkEth);
+    return linkForGas.add(linkForGas.mul(s_config.paymentPremiumPPT).div(PPT_BASE));
   }
 
 
