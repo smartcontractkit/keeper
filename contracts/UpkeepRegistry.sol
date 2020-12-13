@@ -7,6 +7,7 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/Address.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import "./SafeMath96.sol";
 import "./UpkeepBase.sol";
 import "./UpkeepInterface.sol";
 
@@ -18,6 +19,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
   using Address for address;
   using SafeERC20 for IERC20;
   using SafeMath for uint256;
+  using SafeMath96 for uint96;
 
   address constant private ZERO_ADDRESS = address(0);
   bytes4 constant private CHECK_SELECTOR = UpkeepInterface.checkForUpkeep.selector;
@@ -30,6 +32,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
   uint256 constant private REGISTRY_GAS_OVERHEAD = 65_000;
   uint32 constant private PPB_BASE = 1_000_000_000;
   uint64 constant private UINT64_MAX = 2**64 - 1;
+  uint96 constant private LINK_TOTAL_SUPPLY = 1e27;
 
   uint256 private s_registrationCount;
   uint256[] private s_canceledRegistrations;
@@ -76,7 +79,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
   event UpkeepPerformed(
     uint256 indexed id,
     bool indexed success,
-    uint256 payment,
+    uint96 payment,
     bytes performData
   );
   event UpkeepCanceled(
@@ -86,7 +89,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
   event FundsAdded(
     uint256 indexed id,
     address indexed from,
-    uint256 amount
+    uint96 amount
   );
   event FundsWithdrawn(
     uint256 indexed id,
@@ -398,7 +401,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
     Registration storage s_registration = s_registrations[id];
     uint256 gasLimit = s_registration.executeGas;
     (int256 gasWei, int256 linkEth) = getFeedData();
-    uint256 payment = calculatePaymentAmount(gasLimit, gasWei, linkEth);
+    uint96 payment = calculatePaymentAmount(gasLimit, gasWei, linkEth);
     if (s_registration.balance < payment) {
       return false;
     }
@@ -424,7 +427,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
     if (gasWei > int256(tx.gasprice)) {
       gasWei = int256(tx.gasprice);
     }
-    uint256 payment = calculatePaymentAmount(gasLimit, gasWei, linkEth);
+    uint96 payment = calculatePaymentAmount(gasLimit, gasWei, linkEth);
     require(registration.balance >= payment, "!executable");
     require(registration.lastKeeper != msg.sender, "keepers must take turns");
 
@@ -434,23 +437,23 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
     gasUsed = gasUsed - gasleft();
 
     payment = calculatePaymentAmount(gasUsed, gasWei, linkEth);
-    registration.balance = uint96(uint256(registration.balance).sub(payment));
+    registration.balance = registration.balance.sub(payment);
     registration.lastKeeper = msg.sender;
     s_registrations[id] = registration;
-    uint256 newBalance = uint256(s_keeperInfo[msg.sender].balance).add(payment);
-    s_keeperInfo[msg.sender].balance = uint96(newBalance);
+    uint96 newBalance = s_keeperInfo[msg.sender].balance.add(payment);
+    s_keeperInfo[msg.sender].balance = newBalance;
 
     emit UpkeepPerformed(id, success, payment, performData);
   }
 
   function addFunds(
     uint256 id,
-    uint256 amount
+    uint96 amount
   )
     external
     validRegistration(id)
   {
-    s_registrations[id].balance = uint96(uint256(s_registrations[id].balance).add(amount));
+    s_registrations[id].balance = s_registrations[id].balance.add(amount);
     LINK.transferFrom(msg.sender, address(this), amount);
     emit FundsAdded(id, msg.sender, amount);
   }
@@ -591,17 +594,20 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
     private
     view
     returns (
-      uint256 payment
+      uint96 payment
     )
   {
-    // Assuming that the total ETH supply is capped by 2**128 Wei, the maximum
-    // intermediate value here is on the order of 2**188 and will therefore
-    // always fit a uint256.
     uint256 weiForGas = uint256(gasWei).mul(gasLimit.add(REGISTRY_GAS_OVERHEAD));
     uint256 linkForGas = weiForGas.mul(LINK_DIVISIBILITY).div(uint256(linkEth));
-    return linkForGas.add(linkForGas.mul(s_config.paymentPremiumPPB).div(PPB_BASE));
+    uint256 premium = linkForGas.mul(s_config.paymentPremiumPPB).div(PPB_BASE);
+    uint256 total = linkForGas.add(premium);
+    require(total <= LINK_TOTAL_SUPPLY, "payment greater than all LINK");
+    return uint96(total); // LINK_TOTAL_SUPPLY < UINT96_MAX
   }
 
+  /*
+   * @dev safe to cast uint256 to uint96 as total LINK supply is under UINT96MAX
+   */
   function onTokenTransfer(
     address sender,
     uint256 amount,
@@ -614,12 +620,15 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
     uint256 id = abi.decode(data, (uint256));
     validateRegistration(id);
 
-    s_registrations[id].balance = uint96(uint256(s_registrations[id].balance).add(amount));
+    s_registrations[id].balance = s_registrations[id].balance.add(uint96(amount));
 
-    emit FundsAdded(id, sender, amount);
+    emit FundsAdded(id, sender, uint96(amount));
   }
 
-  // @dev calls target address with exactly gasAmount gas and data as calldata or reverts
+  /*
+   * @dev calls target address with exactly gasAmount gas and data as calldata
+   * or reverts
+   */
   function callWithExactGas(
     uint256 gasAmount,
     address target,

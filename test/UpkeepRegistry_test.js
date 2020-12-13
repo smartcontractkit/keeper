@@ -838,13 +838,11 @@ contract('UpkeepRegistry', (accounts) => {
       const longData = web3.eth.abi.encodeParameters(['uint256', 'uint256'], ['33', '34'])
       const shortData = "0x12345678"
 
-      await expectRevert(
-        linkToken.transferAndCall(registry.address, amount, longData, {from: owner}),
-        "data must be 32 bytes"
+      await expectRevert.unspecified(
+        linkToken.transferAndCall(registry.address, amount, longData, {from: owner})
       )
-      await expectRevert(
-        linkToken.transferAndCall(registry.address, amount, shortData, {from: owner}),
-        "data must be 32 bytes"
+      await expectRevert.unspecified(
+        linkToken.transferAndCall(registry.address, amount, shortData, {from: owner})
       )
     })
 
