@@ -310,7 +310,10 @@ contract UpkeepRegistry is Owned {
     }
 
     bytes memory callData = abi.encodeWithSelector(CHECK_SELECTOR, registration.checkData);
-    (bool success, bytes memory result) = registration.target.call(callData);
+    (
+      bool success,
+      bytes memory result
+    ) = registration.target.call{gas: s_config.checkMaxGas}(callData);
     if (!success) {
       return (false, performData, 0, 0, 0, 0);
     }
