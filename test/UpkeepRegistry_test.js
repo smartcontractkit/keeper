@@ -197,21 +197,33 @@ contract('UpkeepRegistry', (accounts) => {
   })
 
   describe('#addFunds', () => {
+    const amount = ether('1')
+
     beforeEach(async () => {
       await linkToken.approve(registry.address, ether('100'), { from: keeper1 })
     })
 
     it('reverts if the registration does not exist', async () => {
       await expectRevert(
-        registry.addFunds(id + 1, ether('1'), { from: keeper1 }),
+        registry.addFunds(id + 1, amount, { from: keeper1 }),
         'invalid upkeep id'
       )
     })
 
     it('adds to the balance of the registration', async () => {
-      await registry.addFunds(id, ether('1'), { from: keeper1 })
+      await registry.addFunds(id, amount, { from: keeper1 })
       const registration = await registry.getRegistration(id)
-      assert.isTrue(ether('1').eq(registration.balance))
+      assert.isTrue(amount.eq(registration.balance))
+    })
+
+    it('emits a log', async () => {
+      const { receipt } = await registry.addFunds(id, amount, { from: keeper1 })
+
+      expectEvent(receipt, 'FundsAdded', {
+        id: id,
+        from: keeper1,
+        amount: amount
+      })
     })
   })
 
@@ -538,12 +550,12 @@ contract('UpkeepRegistry', (accounts) => {
       })
 
       it('updates the canceled registrations list', async () => {
-        let canceled = await registry.getCanceledUpkeeps.call()
+        let canceled = await registry.getCanceledUpkeepList.call()
         assert.deepEqual([], canceled)
 
         await registry.cancelUpkeep(id, { from: owner })
 
-        canceled = await registry.getCanceledUpkeeps.call()
+        canceled = await registry.getCanceledUpkeepList.call()
         assert.deepEqual([id], canceled)
       })
 
@@ -584,12 +596,12 @@ contract('UpkeepRegistry', (accounts) => {
       })
 
       it('updates the canceled registrations list', async () => {
-        let canceled = await registry.getCanceledUpkeeps.call()
+        let canceled = await registry.getCanceledUpkeepList.call()
         assert.deepEqual([], canceled)
 
         await registry.cancelUpkeep(id, { from: admin })
 
-        canceled = await registry.getCanceledUpkeeps.call()
+        canceled = await registry.getCanceledUpkeepList.call()
         assert.deepEqual([id], canceled)
       })
 
@@ -807,6 +819,43 @@ contract('UpkeepRegistry', (accounts) => {
         fallbackGasPrice: fbGasEth,
         fallbackLinkPrice: fbLinkEth,
       })
+    })
+  })
+
+  describe('#onTokenTransfer', () => {
+    const amount = ether('1')
+
+    it("reverts if not called by the LINK token", async () => {
+      const data = web3.eth.abi.encodeParameter('uint256', id.toNumber().toString())
+
+      await expectRevert(
+        registry.onTokenTransfer(keeper1, amount, data, {from: keeper1}),
+        "only callable through LINK"
+      )
+    })
+
+    it("reverts if not called with more or less than 32 bytes", async () => {
+      const longData = web3.eth.abi.encodeParameters(['uint256', 'uint256'], ['33', '34'])
+      const shortData = "0x12345678"
+
+      await expectRevert(
+        linkToken.transferAndCall(registry.address, amount, longData, {from: owner}),
+        "data must be 32 bytes"
+      )
+      await expectRevert(
+        linkToken.transferAndCall(registry.address, amount, shortData, {from: owner}),
+        "data must be 32 bytes"
+      )
+    })
+
+    it('updates the funds of the job id passed', async () => {
+      const data = web3.eth.abi.encodeParameter('uint256', id.toNumber().toString())
+
+      const before = (await registry.getRegistration(id)).balance
+      await linkToken.transferAndCall(registry.address, amount, data, { from: owner})
+      const after = (await registry.getRegistration(id)).balance
+
+      assert.isTrue(before.add(amount).eq(after))
     })
   })
 })

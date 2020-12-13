@@ -85,11 +85,13 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
   );
   event FundsAdded(
     uint256 indexed id,
+    address indexed from,
     uint256 amount
   );
-  event KeepersUpdated(
-    address[] keepers,
-    address[] payees
+  event FundsWithdrawn(
+    uint256 indexed id,
+    uint256 amount,
+    address to
   );
   event ConfigSet(
     uint32 paymentPremiumPPB,
@@ -99,10 +101,9 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
     int256 fallbackGasPrice,
     int256 fallbackLinkPrice
   );
-  event FundsWithdrawn(
-    uint256 indexed id,
-    uint256 amount,
-    address to
+  event KeepersUpdated(
+    address[] keepers,
+    address[] payees
   );
   event PaymentWithdrawn(
     address indexed keeper,
@@ -389,7 +390,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
   )
     external
     cannotExecute()
-    validateRegistration(id)
+    validRegistration(id)
     returns (
       bool success
     )
@@ -415,7 +416,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
     external
     nonReentrant()
     validateKeeper()
-    validateRegistration(id)
+    validRegistration(id)
   {
     Registration memory registration = s_registrations[id];
     uint256 gasLimit = registration.executeGas;
@@ -447,11 +448,11 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
     uint256 amount
   )
     external
-    validateRegistration(id)
+    validRegistration(id)
   {
     s_registrations[id].balance = uint96(uint256(s_registrations[id].balance).add(amount));
     LINK.transferFrom(msg.sender, address(this), amount);
-    emit FundsAdded(id, amount);
+    emit FundsAdded(id, msg.sender, amount);
   }
 
   function withdrawFunds(
@@ -485,7 +486,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
     LINK.transfer(to, keeper.balance);
   }
 
-  function getCanceledUpkeeps()
+  function getCanceledUpkeepList()
     external
     view
     returns (
@@ -601,6 +602,23 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
     return linkForGas.add(linkForGas.mul(s_config.paymentPremiumPPB).div(PPB_BASE));
   }
 
+  function onTokenTransfer(
+    address sender,
+    uint256 amount,
+    bytes calldata data
+  )
+    external
+  {
+    require(msg.sender == address(LINK), "only callable through LINK");
+    require(data.length == 32, "data must be 32 bytes");
+    uint256 id = abi.decode(data, (uint256));
+    validateRegistration(id);
+
+    s_registrations[id].balance = uint96(uint256(s_registrations[id].balance).add(amount));
+
+    emit FundsAdded(id, sender, amount);
+  }
+
   // @dev calls target address with exactly gasAmount gas and data as calldata or reverts
   function callWithExactGas(
     uint256 gasAmount,
@@ -628,12 +646,21 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
     return success;
   }
 
+  function validateRegistration(
+    uint256 id
+  )
+    private
+    view
+  {
+    require(s_registrations[id].maxValidBlocknumber > block.number, "invalid upkeep id");
+  }
+
   // MODIFIERS
 
-  modifier validateRegistration(
+  modifier validRegistration(
     uint256 id
   ) {
-    require(s_registrations[id].maxValidBlocknumber > block.number, "invalid upkeep id");
+    validateRegistration(id);
     _;
   }
 
