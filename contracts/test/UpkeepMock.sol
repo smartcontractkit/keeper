@@ -1,8 +1,8 @@
 pragma solidity 0.6.12;
 
-import '../UpkeptInterface.sol';
+import '../UpkeepInterface.sol';
 
-contract UpkeptMock is UpkeptInterface {
+contract UpkeepMock is UpkeepInterface {
   bool public canExecute;
 
   event UpkeepPerformedWith(bytes upkeepData);

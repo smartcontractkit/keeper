@@ -1,6 +1,6 @@
 const UpkeepRegistry = artifacts.require('UpkeepRegistry')
-const UpkeptMock = artifacts.require('UpkeptMock')
-const UpkeptReverter = artifacts.require('UpkeptReverter')
+const UpkeepMock = artifacts.require('UpkeepMock')
+const UpkeepReverter = artifacts.require('UpkeepReverter')
 const { LinkToken } = require('@chainlink/contracts/truffle/v0.4/LinkToken')
 const { MockV3Aggregator } = require('@chainlink/contracts/truffle/v0.6/MockV3Aggregator')
 const { BN, constants, ether, expectEvent, expectRevert, time } = require('@openzeppelin/test-helpers')
@@ -59,7 +59,7 @@ contract('UpkeepRegistry', (accounts) => {
       fallbackLinkPrice,
       { from: owner }
     )
-    mock = await UpkeptMock.new()
+    mock = await UpkeepMock.new()
     await linkToken.transfer(keeper1, ether('100'), { from: owner })
     await linkToken.transfer(keeper2, ether('100'), { from: owner })
     await linkToken.transfer(keeper3, ether('100'), { from: owner })
@@ -134,7 +134,7 @@ contract('UpkeepRegistry', (accounts) => {
     })
 
     it('reverts if called by a non-owner', async () => {
-      const reverter = await UpkeptReverter.new()
+      const reverter = await UpkeepReverter.new()
       await expectRevert(
         registry.registerUpkeep(
           reverter.address,
@@ -162,7 +162,7 @@ contract('UpkeepRegistry', (accounts) => {
 
 
     it('reverts if execute gas is too high', async () => {
-      const reverter = await UpkeptReverter.new()
+      const reverter = await UpkeepReverter.new()
       await expectRevert(
         registry.registerUpkeep(
           mock.address,

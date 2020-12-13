@@ -6,7 +6,7 @@ import "@openzeppelin/contracts/math/SafeMath.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/Address.sol";
-import "./UpkeptInterface.sol";
+import "./UpkeepInterface.sol";
 
 contract UpkeepRegistry is Owned {
   using Address for address;
@@ -14,8 +14,8 @@ contract UpkeepRegistry is Owned {
   using SafeMath for uint256;
 
   address constant private ZERO_ADDRESS = address(0);
-  bytes4 constant private CHECK_SELECTOR = UpkeptInterface.checkForUpkeep.selector;
-  bytes4 constant private PERFORM_SELECTOR = UpkeptInterface.performUpkeep.selector;
+  bytes4 constant private CHECK_SELECTOR = UpkeepInterface.checkForUpkeep.selector;
+  bytes4 constant private PERFORM_SELECTOR = UpkeepInterface.performUpkeep.selector;
   uint64 constant private UINT64_MAX = 2**64 - 1;
   uint256 constant private CALL_GAS_MIN = 2_300;
   uint256 constant private CALL_GAS_MAX = 2_500_000;
