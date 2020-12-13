@@ -166,134 +166,8 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
     );
   }
 
-  /*
-   * @notice updates the configuration of the registry
-   * @param paymentPremiumPPB payment premium rate oracles receive on top of
-   * being reimbursed for gas, measured in parts per thousand
-   * @param checkFrequencyBlocks number of blocks an oracle should wait before
-   * checking for upkeep
-   * @param checkGasLimit gas limit when checking for upkeep
-   * @param stalenessSeconds number of seconds that is allowed for feed data to
-   * be stale before switching to the fallback pricing
-   * @param fallbackGasPrice gas price used if the gas price feed is stale
-   * @param fallbackLinkPrice LINK price used if the LINK price feed is stale
-   */
-  function setConfig(
-    uint32 paymentPremiumPPB,
-    uint24 checkFrequencyBlocks,
-    uint32 checkGasLimit,
-    uint24 stalenessSeconds,
-    int256 fallbackGasPrice,
-    int256 fallbackLinkPrice
-  )
-    onlyOwner()
-    public
-  {
-    s_config = Config({
-      paymentPremiumPPB: paymentPremiumPPB,
-      checkFrequencyBlocks: checkFrequencyBlocks,
-      checkGasLimit: checkGasLimit,
-      stalenessSeconds: stalenessSeconds
-    });
-    s_fallbackGasPrice = fallbackGasPrice;
-    s_fallbackLinkPrice = fallbackLinkPrice;
 
-    emit ConfigSet(
-      paymentPremiumPPB,
-      checkFrequencyBlocks,
-      checkGasLimit,
-      stalenessSeconds,
-      fallbackGasPrice,
-      fallbackLinkPrice
-    );
-  }
-
-  /*
-   * @notice read the current configuration of the registry
-   */
-  function getConfig()
-    external
-    view
-    returns (
-      uint32 paymentPremiumPPB,
-      uint24 checkFrequencyBlocks,
-      uint32 checkGasLimit,
-      uint24 stalenessSeconds,
-      int256 fallbackGasPrice,
-      int256 fallbackLinkPrice
-    )
-  {
-    Config memory config = s_config;
-    return (
-      config.paymentPremiumPPB,
-      config.checkFrequencyBlocks,
-      config.checkGasLimit,
-      config.stalenessSeconds,
-      s_fallbackGasPrice,
-      s_fallbackLinkPrice
-    );
-  }
-
-  /*
-   * @notice update the list of keepers allowed to peform upkeep
-   * @param keepers list of addresses allowed to perform upkeep
-   * @param payees addreses corresponding to keepers who are allowed to
-   * move payments which have been acrued
-   */
-  function setKeepers(
-    address[] calldata keepers,
-    address[] calldata payees
-  )
-    external
-    onlyOwner()
-  {
-    for (uint256 i = 0; i < s_keepers.length; i++) {
-      address keeper = s_keepers[i];
-      s_keeperInfo[keeper].active = false;
-    }
-    for (uint256 i = 0; i < keepers.length; i++) {
-      address keeper = keepers[i];
-      KeeperInfo storage s_keeper = s_keeperInfo[keeper];
-      address oldPayee = s_keeper.payee;
-      address newPayee = payees[i];
-      require(oldPayee == ZERO_ADDRESS || oldPayee == newPayee, "cannot change payee");
-      s_keeper.payee = newPayee;
-      s_keeper.active = true;
-    }
-    s_keepers = keepers;
-    emit KeepersUpdated(keepers, payees);
-  }
-
-  /*
-   * @notice read the current list of addresses allowed to perform upkeep
-   */
-  function getKeepers()
-    external
-    view
-    returns (
-      address[] memory
-    )
-  {
-    return s_keepers;
-  }
-
-  /*
-   * @notice read the current info about any keeper address
-   */
-  function getKeeperInfo(
-    address query
-  )
-    external
-    view
-    returns (
-      address payee,
-      bool active,
-      uint96 balance
-    )
-  {
-    KeeperInfo memory keeper = s_keeperInfo[query];
-    return (keeper.payee, keeper.active, keeper.balance);
-  }
+  // ACTIONS
 
   /*
    * @notice adds a new registration for upkeep
@@ -331,28 +205,6 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
     emit UpkeepRegistered(id, gasLimit, admin);
   }
 
-  /*
-   * @notice prevent an upkeep from being performed in the future
-   * @param id registration to be canceled
-   */
-  function cancelUpkeep(
-    uint256 id
-  )
-    external
-  {
-    require(s_registrations[id].maxValidBlocknumber == UINT64_MAX, "cannot cancel upkeep");
-    bool isOwner = msg.sender == owner;
-    require(isOwner|| msg.sender == s_registrations[id].admin, "only owner or admin");
-
-    uint256 height = block.number;
-    if (!isOwner) {
-      height = height.add(CANCELATION_DELAY);
-    }
-    s_registrations[id].maxValidBlocknumber = uint64(height);
-    s_canceledRegistrations.push(id);
-
-    emit UpkeepCanceled(id, uint64(height));
-  }
   function checkForUpkeep(
     uint256 id
   )
@@ -446,6 +298,29 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
     emit UpkeepPerformed(id, success, payment, performData);
   }
 
+  /*
+   * @notice prevent an upkeep from being performed in the future
+   * @param id registration to be canceled
+   */
+  function cancelUpkeep(
+    uint256 id
+  )
+    external
+  {
+    require(s_registrations[id].maxValidBlocknumber == UINT64_MAX, "cannot cancel upkeep");
+    bool isOwner = msg.sender == owner;
+    require(isOwner|| msg.sender == s_registrations[id].admin, "only owner or admin");
+
+    uint256 height = block.number;
+    if (!isOwner) {
+      height = height.add(CANCELATION_DELAY);
+    }
+    s_registrations[id].maxValidBlocknumber = uint64(height);
+    s_canceledRegistrations.push(id);
+
+    emit UpkeepCanceled(id, uint64(height));
+  }
+
   function addFunds(
     uint256 id,
     uint96 amount
@@ -489,15 +364,111 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
     LINK.transfer(to, keeper.balance);
   }
 
-  function getCanceledUpkeepList()
+  function transferPayeeship(
+    address keeper,
+    address proposed
+  )
     external
-    view
-    returns (
-      uint256[] memory
-    )
   {
-    return s_canceledRegistrations;
+    require(s_keeperInfo[keeper].payee == msg.sender, "only callable by payee");
+    require(proposed != msg.sender, "cannot transfer to self");
+
+    if (s_proposedPayee[keeper] != proposed) {
+      s_proposedPayee[keeper] = proposed;
+      emit PayeeshipTransferRequested(keeper, msg.sender, proposed);
+    }
   }
+
+  function acceptPayeeship(
+    address keeper
+  )
+    external
+  {
+    require(s_proposedPayee[keeper] == msg.sender, "only callable by proposed payee");
+    address past = s_keeperInfo[keeper].payee;
+    s_keeperInfo[keeper].payee = msg.sender;
+    s_proposedPayee[keeper] = ZERO_ADDRESS;
+
+    emit PayeeshipTransferred(keeper, past, msg.sender);
+  }
+
+
+  // SETTERS
+
+  /*
+   * @notice updates the configuration of the registry
+   * @param paymentPremiumPPB payment premium rate oracles receive on top of
+   * being reimbursed for gas, measured in parts per thousand
+   * @param checkFrequencyBlocks number of blocks an oracle should wait before
+   * checking for upkeep
+   * @param checkGasLimit gas limit when checking for upkeep
+   * @param stalenessSeconds number of seconds that is allowed for feed data to
+   * be stale before switching to the fallback pricing
+   * @param fallbackGasPrice gas price used if the gas price feed is stale
+   * @param fallbackLinkPrice LINK price used if the LINK price feed is stale
+   */
+  function setConfig(
+    uint32 paymentPremiumPPB,
+    uint24 checkFrequencyBlocks,
+    uint32 checkGasLimit,
+    uint24 stalenessSeconds,
+    int256 fallbackGasPrice,
+    int256 fallbackLinkPrice
+  )
+    onlyOwner()
+    public
+  {
+    s_config = Config({
+      paymentPremiumPPB: paymentPremiumPPB,
+      checkFrequencyBlocks: checkFrequencyBlocks,
+      checkGasLimit: checkGasLimit,
+      stalenessSeconds: stalenessSeconds
+    });
+    s_fallbackGasPrice = fallbackGasPrice;
+    s_fallbackLinkPrice = fallbackLinkPrice;
+
+    emit ConfigSet(
+      paymentPremiumPPB,
+      checkFrequencyBlocks,
+      checkGasLimit,
+      stalenessSeconds,
+      fallbackGasPrice,
+      fallbackLinkPrice
+    );
+  }
+
+  /*
+   * @notice update the list of keepers allowed to peform upkeep
+   * @param keepers list of addresses allowed to perform upkeep
+   * @param payees addreses corresponding to keepers who are allowed to
+   * move payments which have been acrued
+   */
+  function setKeepers(
+    address[] calldata keepers,
+    address[] calldata payees
+  )
+    external
+    onlyOwner()
+  {
+    for (uint256 i = 0; i < s_keepers.length; i++) {
+      address keeper = s_keepers[i];
+      s_keeperInfo[keeper].active = false;
+    }
+    for (uint256 i = 0; i < keepers.length; i++) {
+      address keeper = keepers[i];
+      KeeperInfo storage s_keeper = s_keeperInfo[keeper];
+      address oldPayee = s_keeper.payee;
+      address newPayee = payees[i];
+      require(oldPayee == ZERO_ADDRESS || oldPayee == newPayee, "cannot change payee");
+      s_keeper.payee = newPayee;
+      s_keeper.active = true;
+    }
+    s_keepers = keepers;
+    emit KeepersUpdated(keepers, payees);
+  }
+
+
+  // GETTERS
 
   function getRegistration(
     uint256 id
@@ -524,21 +495,6 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
     );
   }
 
-  function transferPayeeship(
-    address keeper,
-    address proposed
-  )
-    external
-  {
-    require(s_keeperInfo[keeper].payee == msg.sender, "only callable by payee");
-    require(proposed != msg.sender, "cannot transfer to self");
-
-    if (s_proposedPayee[keeper] != proposed) {
-      s_proposedPayee[keeper] = proposed;
-      emit PayeeshipTransferRequested(keeper, msg.sender, proposed);
-    }
-  }
-
   function getRegistrationCount()
     external
     view
@@ -549,18 +505,73 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
     return s_registrationCount;
   }
 
-  function acceptPayeeship(
-    address keeper
+  function getCanceledUpkeepList()
+    external
+    view
+    returns (
+      uint256[] memory
+    )
+  {
+    return s_canceledRegistrations;
+  }
+
+  /*
+   * @notice read the current list of addresses allowed to perform upkeep
+   */
+  function getKeepers()
+    external
+    view
+    returns (
+      address[] memory
+    )
+  {
+    return s_keepers;
+  }
+
+  /*
+   * @notice read the current info about any keeper address
+   */
+  function getKeeperInfo(
+    address query
   )
     external
+    view
+    returns (
+      address payee,
+      bool active,
+      uint96 balance
+    )
   {
-    require(s_proposedPayee[keeper] == msg.sender, "only callable by proposed payee");
-    address past = s_keeperInfo[keeper].payee;
-    s_keeperInfo[keeper].payee = msg.sender;
-    s_proposedPayee[keeper] = ZERO_ADDRESS;
-
-    emit PayeeshipTransferred(keeper, past, msg.sender);
+    KeeperInfo memory keeper = s_keeperInfo[query];
+    return (keeper.payee, keeper.active, keeper.balance);
   }
+
+  /*
+   * @notice read the current configuration of the registry
+   */
+  function getConfig()
+    external
+    view
+    returns (
+      uint32 paymentPremiumPPB,
+      uint24 checkFrequencyBlocks,
+      uint32 checkGasLimit,
+      uint24 stalenessSeconds,
+      int256 fallbackGasPrice,
+      int256 fallbackLinkPrice
+    )
+  {
+    Config memory config = s_config;
+    return (
+      config.paymentPremiumPPB,
+      config.checkFrequencyBlocks,
+      config.checkGasLimit,
+      config.stalenessSeconds,
+      s_fallbackGasPrice,
+      s_fallbackLinkPrice
+    );
+  }
+
 
   // PRIVATE
 
@@ -663,6 +674,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
   {
     require(s_registrations[id].maxValidBlocknumber > block.number, "invalid upkeep id");
   }
+
 
   // MODIFIERS
 
