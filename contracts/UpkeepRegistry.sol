@@ -122,7 +122,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
   /*
    * @param link address of the LINK Token
    * @param linkEthFeed address of the LINK/ETH price feed
-   * @param fastGas address of the Fast Gas price feed
+   * @param fastGasFeed address of the Fast Gas price feed
    * @param paymentPremiumPPB payment premium rate oracles receive on top of
    * being reimbursed for gas, measured in parts per thousand
    * @param checkFrequencyBlocks number of blocks an oracle should wait before
@@ -161,9 +161,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
   }
 
   /*
-   * @param link address of the LINK Token
-   * @param linkEthFeed address of the LINK/ETH price feed
-   * @param fastGas address of the Fast Gas price feed
+   * @notice updates the configuration of the registry
    * @param paymentPremiumPPB payment premium rate oracles receive on top of
    * being reimbursed for gas, measured in parts per thousand
    * @param checkFrequencyBlocks number of blocks an oracle should wait before
@@ -204,6 +202,9 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
     );
   }
 
+  /*
+   * @notice read the current configuration of the registry
+   */
   function getConfig()
     external
     view
@@ -227,6 +228,12 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
     );
   }
 
+  /*
+   * @notice update the list of keepers allowed to peform upkeep
+   * @param keepers list of addresses allowed to perform upkeep
+   * @param payees addreses corresponding to keepers who are allowed to
+   * move payments which have been acrued
+   */
   function setKeepers(
     address[] calldata keepers,
     address[] calldata payees
@@ -251,6 +258,9 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
     emit KeepersUpdated(keepers, payees);
   }
 
+  /*
+   * @notice read the current list of addresses allowed to perform upkeep
+   */
   function getKeepers()
     external
     view
@@ -261,6 +271,9 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
     return s_keepers;
   }
 
+  /*
+   * @notice read the current info about any keeper address
+   */
   function getKeeperInfo(
     address query
   )
@@ -276,6 +289,14 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
     return (keeper.payee, keeper.active, keeper.balance);
   }
 
+  /*
+   * @notice adds a new registration for upkeep
+   * @param target address to peform upkeep on
+   * @param gasLimit amount of gas to provide the target contract when
+   * performing upkeep
+   * @param admin address to cancel upkeep and withdraw remaining funds
+   * @param queryData data passed to the contract when checking for upkeep
+   */
   function registerUpkeep(
     address target,
     uint32 gasLimit,
@@ -303,6 +324,10 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
     emit UpkeepRegistered(id, gasLimit, admin);
   }
 
+  /*
+   * @notice cancels an upkeep registration so it can no longer be performed
+   * @param id registration to be canceled
+   */
   function cancelRegistration(
     uint256 id
   )
@@ -321,7 +346,6 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
 
     emit RegistrationCanceled(id, uint64(height));
   }
-
   function checkForUpkeep(
     uint256 id
   )
