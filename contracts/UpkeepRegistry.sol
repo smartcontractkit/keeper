@@ -6,9 +6,10 @@ import "@openzeppelin/contracts/math/SafeMath.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/Address.sol";
+import "./UpkeepBase.sol";
 import "./UpkeepInterface.sol";
 
-contract UpkeepRegistry is Owned {
+contract UpkeepRegistry is Owned, UpkeepBase {
   using Address for address;
   using SafeERC20 for IERC20;
   using SafeMath for uint256;
@@ -542,12 +543,6 @@ contract UpkeepRegistry is Owned {
     uint256 id
   ) {
     require(s_registrations[id].validUntilHeight > block.number, "invalid upkeep id");
-    _;
-  }
-
-  modifier cannotExecute()
-  {
-    require(msg.sender == ZERO_ADDRESS, "only for simulated backend");
     _;
   }
 
