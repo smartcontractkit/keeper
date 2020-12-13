@@ -470,7 +470,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
 
   // GETTERS
 
-  function getRegistration(
+  function getUpkeep(
     uint256 id
   )
     external
@@ -495,7 +495,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
     );
   }
 
-  function getRegistrationCount()
+  function getUpkeepCount()
     external
     view
     returns (
