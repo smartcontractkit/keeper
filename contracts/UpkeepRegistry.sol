@@ -6,6 +6,7 @@ import "@openzeppelin/contracts/math/SafeMath.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/Address.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "./UpkeepBase.sol";
 import "./UpkeepInterface.sol";
 
@@ -13,7 +14,7 @@ import "./UpkeepInterface.sol";
   * @notice Registry for adding work for Chainlink Keepers to perform on client
   * contracts. Clients must support the Upkeep interface.
 */
-contract UpkeepRegistry is Owned, UpkeepBase {
+contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
   using Address for address;
   using SafeERC20 for IERC20;
   using SafeMath for uint256;
@@ -38,7 +39,6 @@ contract UpkeepRegistry is Owned, UpkeepBase {
   Config private s_config;
   int256 private s_fallbackGasPrice;  // not in config object for gas savings
   int256 private s_fallbackLinkPrice; // not in config object for gas savings
-  bool private s_unentered = true;
 
   IERC20 public immutable LINK;
   AggregatorV3Interface public immutable LINK_ETH_FEED;
@@ -120,23 +120,23 @@ contract UpkeepRegistry is Owned, UpkeepBase {
   );
 
   /*
-   * @param link the address of the LINK Token
-   * @param _reasonableGasPrice transmitter will receive reward for gas prices under this value
-   * @param _microLinkPerEth reimbursement per ETH of gas cost, in 1e-6LINK units
-   * @param _linkGweiPerObservation reward to oracle for contributing an observation to a successfully transmitted report, in 1e-9LINK units
-   * @param _linkGweiPerTransmission reward to transmitter of a successful report, in 1e-9LINK units
-   * @param _link address of the LINK contract
-   * @param _validator address of validator contract (must satisfy AggregatorValidatorInterface)
-   * @param _minAnswer lowest answer the median of a report is allowed to be
-   * @param _maxAnswer highest answer the median of a report is allowed to be
-   * @param _billingAdminAccessController access controller for billing admin functions
-   * @param _decimals answers are stored in fixed-point format, with this many digits of precision
-   * @param _description short human-readable description of observable this contract's answers pertain to
+   * @param link address of the LINK Token
+   * @param linkEthFeed address of the LINK/ETH price feed
+   * @param fastGas address of the Fast Gas price feed
+   * @param paymentPremiumPPB payment premium rate oracles receive on top of
+   * being reimbursed for gas, measured in parts per thousand
+   * @param checkFrequencyBlocks number of blocks an oracle should wait before
+   * checking for upkeep
+   * @param checkMaxGas gas limit when checking for upkeep
+   * @param stalenessSeconds number of seconds that is allowed for feed data to
+   * be stale before switching to the fallback pricing
+   * @param fallbackGasPrice gas price used if the gas price feed is stale
+   * @param fallbackLinkPrice LINK price used if the LINK price feed is stale
    */
   constructor(
     address link,
-    address linkEth,
-    address fastGas,
+    address linkEthFeed,
+    address fastGasFeed,
     uint32 paymentPremiumPPB,
     uint24 checkFrequencyBlocks,
     uint32 checkMaxGas,
@@ -147,8 +147,8 @@ contract UpkeepRegistry is Owned, UpkeepBase {
     public
   {
     LINK = IERC20(link);
-    LINKETH = AggregatorV3Interface(linkEth);
-    FASTGAS = AggregatorV3Interface(fastGas);
+    LINK_ETH_FEED = AggregatorV3Interface(linkEthFeed);
+    FAST_GAS_FEED = AggregatorV3Interface(fastGasFeed);
 
     setConfig(
       paymentPremiumPPB,
@@ -160,6 +160,20 @@ contract UpkeepRegistry is Owned, UpkeepBase {
     );
   }
 
+  /*
+   * @param link address of the LINK Token
+   * @param linkEthFeed address of the LINK/ETH price feed
+   * @param fastGas address of the Fast Gas price feed
+   * @param paymentPremiumPPB payment premium rate oracles receive on top of
+   * being reimbursed for gas, measured in parts per thousand
+   * @param checkFrequencyBlocks number of blocks an oracle should wait before
+   * checking for upkeep
+   * @param checkMaxGas gas limit when checking for upkeep
+   * @param stalenessSeconds number of seconds that is allowed for feed data to
+   * be stale before switching to the fallback pricing
+   * @param fallbackGasPrice gas price used if the gas price feed is stale
+   * @param fallbackLinkPrice LINK price used if the LINK price feed is stale
+   */
   function setConfig(
     uint32 paymentPremiumPPB,
     uint24 checkFrequencyBlocks,
@@ -372,7 +386,7 @@ contract UpkeepRegistry is Owned, UpkeepBase {
     bytes calldata performData
   )
     external
-    cannotReenter()
+    nonReentrant()
     validateKeeper()
     validateRegistration(id)
   {
@@ -491,6 +505,7 @@ contract UpkeepRegistry is Owned, UpkeepBase {
 
   function getRegistrationCount()
     external
+    view
     returns (
       uint256
     )
@@ -568,14 +583,6 @@ contract UpkeepRegistry is Owned, UpkeepBase {
   {
     require(s_keeperInfo[msg.sender].active, "only active keepers");
     _;
-  }
-
-  modifier cannotReenter()
-  {
-    require(s_unentered, "cannot re-enter");
-    s_unentered = false;
-    _;
-    s_unentered = true;
   }
 
 }
