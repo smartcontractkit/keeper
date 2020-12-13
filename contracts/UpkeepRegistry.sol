@@ -50,6 +50,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
     uint96 balance;
     address admin;
     uint64 validUntilHeight;
+    address lastKeeper;
     bytes checkData;
   }
 
@@ -317,6 +318,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
       balance: 0,
       admin: admin,
       validUntilHeight: UINT64_MAX,
+      lastKeeper: address(0),
       checkData: queryData
     });
     s_registrationCount++;
@@ -422,6 +424,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
     }
     uint256 payment = calculatePaymentAmount(gasLimit, gasWei, linkEth);
     require(registration.balance >= payment, "!executable");
+    require(registration.lastKeeper != msg.sender, "keepers must take turns");
     uint256  gasUsed = gasleft();
     require(gasUsed > registration.executeGas, "!gasleft");
 
@@ -430,7 +433,9 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
     gasUsed = gasUsed - gasleft();
 
     payment = calculatePaymentAmount(gasUsed, gasWei, linkEth);
-    s_registrations[id].balance = uint96(uint256(registration.balance).sub(payment));
+    registration.balance = uint96(uint256(registration.balance).sub(payment));
+    registration.lastKeeper = msg.sender;
+    s_registrations[id] = registration;
     uint256 newBalance = uint256(s_keeperInfo[msg.sender].balance).add(payment);
     s_keeperInfo[msg.sender].balance = uint96(newBalance);
 

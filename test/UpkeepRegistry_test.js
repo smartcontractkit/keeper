@@ -410,7 +410,7 @@ contract('UpkeepRegistry', (accounts) => {
         )
       })
 
-      it("uses the fallback gas price", async () => {
+      it("uses the fallback gas price if the feed price is stale", async () => {
         const roundId = 99
         const answer = 100
         const updatedAt = 946684800 // New Years 2000 🥳
@@ -427,7 +427,7 @@ contract('UpkeepRegistry', (accounts) => {
         assert.isTrue(linkForGas(3500).lt(difference))
       })
 
-      it("reverts if the link price feed is stale", async () => {
+      it("uses the fallback if the link price feed is stale", async () => {
         const roundId = 99
         const answer = 100
         const updatedAt = 946684800 // New Years 2000 🥳
@@ -442,6 +442,20 @@ contract('UpkeepRegistry', (accounts) => {
         // this should test the difference in gas without being an overly
         // sensitive test.
         assert.isTrue(linkForGas(3500).lt(difference))
+      })
+
+      it('reverts if the same caller calls twice in a row', async () => {
+        await registry.performUpkeep(id, "0x", { from: keeper1 }),
+        await expectRevert(
+          registry.performUpkeep(id, "0x", { from: keeper1 }),
+          'keepers must take turns'
+        )
+        await registry.performUpkeep(id, "0x", { from: keeper2 })
+        await expectRevert(
+          registry.performUpkeep(id, "0x", { from: keeper2 }),
+          'keepers must take turns'
+        )
+        await registry.performUpkeep(id, "0x", { from: keeper1 })
       })
     })
   })
