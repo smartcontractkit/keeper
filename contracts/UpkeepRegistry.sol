@@ -24,10 +24,6 @@ contract UpkeepRegistry is Owned {
   uint256 constant private LINK_DIVISIBILITY = 1e18;
   uint256 constant private REGISTRY_GAS_OVERHEAD = 65_000;
 
-  IERC20 public immutable LINK;
-  AggregatorV3Interface public immutable LINKETH;
-  AggregatorV3Interface public immutable FASTGAS;
-
   uint256 private s_registrationCount;
   uint256[] private s_canceledRegistrations;
   address[] private s_keepers;
@@ -37,6 +33,10 @@ contract UpkeepRegistry is Owned {
   Config private s_config;
   int256 private s_fallbackGasPrice;  // not in config object for gas savings
   int256 private s_fallbackLinkPrice; // not in config object for gas savings
+
+  IERC20 public immutable LINK;
+  AggregatorV3Interface public immutable LINKETH;
+  AggregatorV3Interface public immutable FASTGAS;
 
   struct Registration {
     address target;
@@ -357,9 +357,9 @@ contract UpkeepRegistry is Owned {
     uint256 gasLimit = registration.executeGas;
     (uint256 payment,,) = getPaymentAmounts(gasLimit);
     require(registration.balance >= payment, "!executable");
-    require(gasleft() > registration.executeGas + REGISTRY_GAS_OVERHEAD, "!gasleft");
 
     uint256  gasUsed = gasleft();
+    require(gasUsed > registration.executeGas, "!gasleft");
     bytes memory callData = abi.encodeWithSelector(PERFORM_SELECTOR, performData);
     (bool success,) = registration.target.call{gas: gasLimit}(callData);
     gasUsed = gasUsed - gasleft();
