@@ -467,14 +467,14 @@ contract('UpkeepRegistry', (accounts) => {
 
     it('reverts if called by anyone but the admin', async () => {
       await expectRevert(
-        registry.withdrawFunds(id + 1, ether('1'), payee1, { from: owner }),
+        registry.withdrawFunds(id + 1, payee1, { from: owner }),
         'only callable by admin'
       )
     })
 
     it('reverts if called on an uncanceled registration', async () => {
       await expectRevert(
-        registry.withdrawFunds(id, ether('1'), payee1, { from: admin }),
+        registry.withdrawFunds(id, payee1, { from: admin }),
         'registration must be canceled'
       )
     })
@@ -484,13 +484,6 @@ contract('UpkeepRegistry', (accounts) => {
         await registry.cancelUpkeep(id, { from: owner })
       })
 
-      it('reverts if called with more than available balance', async () => {
-        await expectRevert(
-          registry.withdrawFunds(id, ether('2'), payee1, { from: admin }),
-          'SafeMath: subtraction overflow'
-        )
-      })
-
       it('moves the funds out and updates the balance', async () => {
         const payee1Before = await linkToken.balanceOf(payee1)
         const registryBefore = await linkToken.balanceOf(registry.address)
@@ -498,7 +491,7 @@ contract('UpkeepRegistry', (accounts) => {
         let registration = await registry.getRegistration(id)
         assert.isTrue(ether('1').eq(registration.balance))
 
-        await registry.withdrawFunds(id, ether('1'), payee1, { from: admin })
+        await registry.withdrawFunds(id, payee1, { from: admin })
 
         const payee1After = await linkToken.balanceOf(payee1)
         const registryAfter = await linkToken.balanceOf(registry.address)

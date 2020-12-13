@@ -456,7 +456,6 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
 
   function withdrawFunds(
     uint256 id,
-    uint256 amount,
     address to
   )
     external
@@ -464,7 +463,8 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
     require(s_registrations[id].admin == msg.sender, "only callable by admin");
     require(s_registrations[id].maxValidBlocknumber <= block.number, "registration must be canceled");
 
-    s_registrations[id].balance = uint96(uint256(s_registrations[id].balance).sub(amount));
+    uint256 amount = s_registrations[id].balance;
+    s_registrations[id].balance = 0;
     emit FundsWithdrawn(id, amount, to);
 
     LINK.transfer(to, amount);
