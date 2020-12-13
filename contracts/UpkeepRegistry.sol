@@ -22,13 +22,14 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
   address constant private ZERO_ADDRESS = address(0);
   bytes4 constant private CHECK_SELECTOR = UpkeepInterface.checkForUpkeep.selector;
   bytes4 constant private PERFORM_SELECTOR = UpkeepInterface.performUpkeep.selector;
-  uint64 constant private UINT64_MAX = 2**64 - 1;
-  uint256 constant private CALL_GAS_MIN = 2_300;
   uint256 constant private CALL_GAS_MAX = 2_500_000;
+  uint256 constant private CALL_GAS_MIN = 2_300;
   uint256 constant private CANCELATION_DELAY = 50;
-  uint32 constant private PPB_BASE = 1_000_000_000;
+  uint256 constant private CUSHION = 3000;
   uint256 constant private LINK_DIVISIBILITY = 1e18;
   uint256 constant private REGISTRY_GAS_OVERHEAD = 65_000;
+  uint32 constant private PPB_BASE = 1_000_000_000;
+  uint64 constant private UINT64_MAX = 2**64 - 1;
 
   uint256 private s_registrationCount;
   uint256[] private s_canceledRegistrations;
@@ -425,11 +426,10 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
     uint256 payment = calculatePaymentAmount(gasLimit, gasWei, linkEth);
     require(registration.balance >= payment, "!executable");
     require(registration.lastKeeper != msg.sender, "keepers must take turns");
-    uint256  gasUsed = gasleft();
-    require(gasUsed > registration.executeGas, "!gasleft");
 
+    uint256  gasUsed = gasleft();
     bytes memory callData = abi.encodeWithSelector(PERFORM_SELECTOR, performData);
-    (bool success,) = registration.target.call{gas: gasLimit}(callData);
+    bool success = callWithExactGas(gasLimit, registration.target, callData);
     gasUsed = gasUsed - gasleft();
 
     payment = calculatePaymentAmount(gasUsed, gasWei, linkEth);
@@ -601,6 +601,32 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
     return linkForGas.add(linkForGas.mul(s_config.paymentPremiumPPB).div(PPB_BASE));
   }
 
+  // @dev calls target address with exactly gasAmount gas and data as calldata or reverts
+  function callWithExactGas(
+    uint256 gasAmount,
+    address target,
+    bytes memory data
+  )
+    private
+    returns (
+      bool success
+    )
+  {
+    assembly{
+      let g := gas()
+      // Compute g -= CUSHION and check for underflow
+      if lt(g, CUSHION) { revert(0, 0) }
+      g := sub(g, CUSHION)
+      // if g - g//64 <= gasAmount, revert
+      // (we subtract g//64 because of EIP-150)
+      if iszero(gt(sub(g, div(g, 64)), gasAmount)) { revert(0, 0) }
+      // solidity calls check that a contract actually exists at the destination, so we do the same
+      if iszero(extcodesize(target)) { revert(0, 0) }
+      // call and return whether we succeeded. ignore return data
+      success := call(gasAmount, target, 0, add(data, 0x20), mload(data), 0, 0)
+    }
+    return success;
+  }
 
   // MODIFIERS
 

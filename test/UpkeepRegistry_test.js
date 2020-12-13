@@ -316,9 +316,8 @@ contract('UpkeepRegistry', (accounts) => {
         await mock.setCanExecute(true)
         const mockResponse = await mock.checkForUpkeep.call("0x")
         assert.isTrue(mockResponse.callable)
-        await expectRevert(
-          registry.performUpkeep(id, "0x", { from: keeper1, gas: new BN('120000') }),
-          '!gasleft'
+        await expectRevert.unspecified(
+          registry.performUpkeep(id, "0x", { from: keeper1, gas: new BN('120000') })
         )
       })
 
@@ -368,8 +367,8 @@ contract('UpkeepRegistry', (accounts) => {
         const difference = after.sub(before)
         assert.isTrue(max.gt(totalTx))
         assert.isTrue(totalTx.gt(difference))
-        assert.isTrue(linkForGas(2900).lt(difference)) // exact number is flaky
-        assert.isTrue(linkForGas(3000).gt(difference)) // instead test a range
+        assert.isTrue(linkForGas(3100).lt(difference)) // exact number is flaky
+        assert.isTrue(linkForGas(3200).gt(difference)) // instead test a range
       })
 
       it('pays the caller even if the target function fails', async () => {
