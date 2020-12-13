@@ -401,7 +401,7 @@ contract('UpkeepRegistry', (accounts) => {
       it('reverts if the upkeep has been canceled', async () => {
         await mock.setCanExecute(true)
 
-        await registry.cancelRegistration(id, { from: owner })
+        await registry.cancelUpkeep(id, { from: owner })
 
         await expectRevert(
           registry.performUpkeep(id, "0x", { from: keeper1 }),
@@ -481,7 +481,7 @@ contract('UpkeepRegistry', (accounts) => {
 
     describe("after the registration is cancelled", () => {
       beforeEach(async () => {
-        await registry.cancelRegistration(id, { from: owner })
+        await registry.cancelUpkeep(id, { from: owner })
       })
 
       it('reverts if called with more than available balance', async () => {
@@ -512,50 +512,50 @@ contract('UpkeepRegistry', (accounts) => {
     })
   })
 
-  describe('#cancelRegistration', () => {
+  describe('#cancelUpkeep', () => {
     it('reverts if the ID is not valid', async () => {
       await expectRevert(
-        registry.cancelRegistration(id + 1, { from: owner }),
+        registry.cancelUpkeep(id + 1, { from: owner }),
         'cannot cancel upkeep'
       )
     })
 
     it('reverts if called by a non-owner/non-admin', async () => {
       await expectRevert(
-        registry.cancelRegistration(id, { from: keeper1 }),
+        registry.cancelUpkeep(id, { from: keeper1 }),
         'only owner or admin'
       )
     })
 
     describe("when called by the owner", async () => {
       it('sets the registration to invalid immediately', async () => {
-        const { receipt } = await registry.cancelRegistration(id, { from: owner })
+        const { receipt } = await registry.cancelUpkeep(id, { from: owner })
 
         const registration = await registry.getRegistration(id)
         assert.equal(registration.maxValidBlocknumber.toNumber(), receipt.blockNumber)
       })
 
       it('emits an event', async () => {
-        const { receipt } = await registry.cancelRegistration(id, { from: owner })
+        const { receipt } = await registry.cancelUpkeep(id, { from: owner })
 
-        expectEvent(receipt, 'RegistrationCanceled', {
+        expectEvent(receipt, 'UpkeepCanceled', {
           id: id,
           atBlockHeight: new BN(receipt.blockNumber)
         })
       })
 
       it('updates the canceled registrations list', async () => {
-        let canceled = await registry.getCanceledRegistrations.call()
+        let canceled = await registry.getCanceledUpkeeps.call()
         assert.deepEqual([], canceled)
 
-        await registry.cancelRegistration(id, { from: owner })
+        await registry.cancelUpkeep(id, { from: owner })
 
-        canceled = await registry.getCanceledRegistrations.call()
+        canceled = await registry.getCanceledUpkeeps.call()
         assert.deepEqual([id], canceled)
       })
 
       it('immediately prevents upkeep', async () => {
-        await registry.cancelRegistration(id, { from: owner })
+        await registry.cancelUpkeep(id, { from: owner })
 
         await expectRevert(
           registry.performUpkeep(id, "0x", { from: keeper2 }),
@@ -564,10 +564,10 @@ contract('UpkeepRegistry', (accounts) => {
       })
 
       it('reverts if called multiple times', async () => {
-        await registry.cancelRegistration(id, { from: owner })
+        await registry.cancelUpkeep(id, { from: owner })
 
         await expectRevert(
-          registry.cancelRegistration(id, { from: owner }),
+          registry.cancelUpkeep(id, { from: owner }),
           'cannot cancel upkeep'
         )
       })
@@ -577,33 +577,33 @@ contract('UpkeepRegistry', (accounts) => {
       const delay = 50
 
       it('sets the registration to invalid in 50 blocks', async () => {
-        const { receipt } = await registry.cancelRegistration(id, { from: admin })
+        const { receipt } = await registry.cancelUpkeep(id, { from: admin })
         const registration = await registry.getRegistration(id)
         assert.isFalse(registration.maxValidBlocknumber.eq(receipt.blockNumber + 50))
       })
 
       it('emits an event', async () => {
-        const { receipt } = await registry.cancelRegistration(id, { from: admin })
-        expectEvent(receipt, 'RegistrationCanceled', {
+        const { receipt } = await registry.cancelUpkeep(id, { from: admin })
+        expectEvent(receipt, 'UpkeepCanceled', {
           id: id,
           atBlockHeight: new BN(receipt.blockNumber + delay)
         })
       })
 
       it('updates the canceled registrations list', async () => {
-        let canceled = await registry.getCanceledRegistrations.call()
+        let canceled = await registry.getCanceledUpkeeps.call()
         assert.deepEqual([], canceled)
 
-        await registry.cancelRegistration(id, { from: admin })
+        await registry.cancelUpkeep(id, { from: admin })
 
-        canceled = await registry.getCanceledRegistrations.call()
+        canceled = await registry.getCanceledUpkeeps.call()
         assert.deepEqual([id], canceled)
       })
 
       it('immediately prevents upkeep', async () => {
         await linkToken.approve(registry.address, ether('100'), { from: owner })
         await registry.addFunds(id, ether('100'), { from: owner })
-        await registry.cancelRegistration(id, { from: admin })
+        await registry.cancelUpkeep(id, { from: admin })
         await registry.performUpkeep(id, "0x", { from: keeper2 }) // still works
 
         for (let i = 0; i < delay; i++) {
@@ -617,10 +617,10 @@ contract('UpkeepRegistry', (accounts) => {
       })
 
       it('reverts if called multiple times', async () => {
-        await registry.cancelRegistration(id, { from: admin })
+        await registry.cancelUpkeep(id, { from: admin })
 
         await expectRevert(
-          registry.cancelRegistration(id, { from: admin }),
+          registry.cancelUpkeep(id, { from: admin }),
           'cannot cancel upkeep'
         )
       })

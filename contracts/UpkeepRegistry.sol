@@ -79,7 +79,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
     uint256 payment,
     bytes performData
   );
-  event RegistrationCanceled(
+  event UpkeepCanceled(
     uint256 indexed id,
     uint64 indexed atBlockHeight
   );
@@ -328,10 +328,10 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
   }
 
   /*
-   * @notice cancels an upkeep registration so it can no longer be performed
+   * @notice prevent an upkeep from being performed in the future
    * @param id registration to be canceled
    */
-  function cancelRegistration(
+  function cancelUpkeep(
     uint256 id
   )
     external
@@ -347,7 +347,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
     s_registrations[id].maxValidBlocknumber = uint64(height);
     s_canceledRegistrations.push(id);
 
-    emit RegistrationCanceled(id, uint64(height));
+    emit UpkeepCanceled(id, uint64(height));
   }
   function checkForUpkeep(
     uint256 id
@@ -485,7 +485,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
     LINK.transfer(to, keeper.balance);
   }
 
-  function getCanceledRegistrations()
+  function getCanceledUpkeeps()
     external
     view
     returns (
