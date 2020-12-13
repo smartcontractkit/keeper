@@ -500,15 +500,16 @@ contract UpkeepRegistry is Owned {
       int256 linkEth
     )
   {
-    Config memory _config = s_config;
+    Config memory config = s_config;
     uint256 timestamp;
     (,gasWei,,timestamp,) = FASTGAS.latestRoundData();
-    if (_config.stalenessSeconds > 0) {
-      require(block.timestamp - timestamp < _config.stalenessSeconds, "stale GAS/ETH data");
+    bool staleFallback = config.stalenessSeconds > 0;
+    if (staleFallback && config.stalenessSeconds < block.timestamp - timestamp) {
+      gasWei = s_fallbackGasPrice;
     }
     (,linkEth,,timestamp,) = LINKETH.latestRoundData();
-    if (_config.stalenessSeconds > 0) {
-      require(block.timestamp - timestamp < _config.stalenessSeconds, "stale LINK/ETH data");
+    if (staleFallback && config.stalenessSeconds < block.timestamp - timestamp) {
+      linkEth = s_fallbackLinkPrice;
     }
 
     // Assuming that the total ETH supply is capped by 2**128 Wei, the maximum
@@ -516,7 +517,7 @@ contract UpkeepRegistry is Owned {
     // always fit a uint256.
     uint256 weiForGas = uint256(gasWei).mul(gasLimit.add(REGISTRY_GAS_OVERHEAD));
     uint256 linkForGas = weiForGas.mul(LINK_DIVISIBILITY).div(uint256(linkEth));
-    payment = linkForGas.add(linkForGas.mul(_config.paymentPremiumPPT).div(PPT_BASE));
+    payment = linkForGas.add(linkForGas.mul(config.paymentPremiumPPT).div(PPT_BASE));
 
     return (payment, gasWei, linkEth);
   }

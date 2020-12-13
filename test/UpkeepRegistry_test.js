@@ -30,8 +30,8 @@ contract('UpkeepRegistry', (accounts) => {
   const registryGasOverhead = new BN('65000')
   const stalenessSeconds = new BN(43820)
   const maxCheckGas = new BN(20000000)
-  const fallbackGasPrice = new BN(600000000)
-  const fallbackLinkPrice = new BN(200)
+  const fallbackGasPrice = new BN(200)
+  const fallbackLinkPrice = new BN(200000000)
   let linkToken, linkEthFeed, gasPriceFeed, registry, mock, id
 
   linkForGas = (upkeepGasSpent) => {
@@ -254,41 +254,6 @@ contract('UpkeepRegistry', (accounts) => {
           'only for simulated backend'
         )
       })
-
-      describe.skip("truffle troubles", () => {
-        // Truffle appears to be having trouble with calls that specify they
-        // are from the zero address. If I comment out the modifier that
-        // enforces use of the zero address, the calls that don't use the zero
-        // address pass. I believe these tests are good, but limited by Truffle
-        // at the moment so I'm markig them as skipped.
-        it("reverts if the gas price feed is stale", async () => {
-          const roundId = 99
-          const answer = 42
-          const updatedAt = 946684800
-          const startedAt = 946684799
-          await gasPriceFeed.updateRoundData(roundId, answer, updatedAt, startedAt, {from: owner})
-
-          await expectRevert(
-            registry.checkForUpkeep.call(id),
-            //registry.checkForUpkeep.call(id, {from: zeroAddress}),
-            "stale GAS/ETH data"
-          )
-        })
-
-        it("reverts if the link price feed is stale", async () => {
-          const roundId = 99
-          const answer = 42
-          const updatedAt = 946684800
-          const startedAt = 946684799
-          await linkEthFeed.updateRoundData(roundId, answer, updatedAt, startedAt, {from: owner})
-
-          await expectRevert(
-            registry.checkForUpkeep.call(id),
-            //registry.checkForUpkeep.call(id, {from: zeroAddress}),
-            "stale LINK/ETH data"
-          )
-        })
-      })
     })
   })
 
@@ -442,6 +407,40 @@ contract('UpkeepRegistry', (accounts) => {
           registry.performUpkeep(id, "0x", { from: keeper1 }),
           'invalid upkeep id'
         )
+      })
+
+      it("uses the fallback gas price", async () => {
+        const roundId = 99
+        const answer = 100
+        const updatedAt = 946684800 // New Years 2000 🥳
+        const startedAt = 946684799
+        await gasPriceFeed.updateRoundData(roundId, answer, updatedAt, startedAt, {from: owner})
+
+        const before = (await registry.getKeeperInfo(keeper1)).balance
+        const { receipt } = await registry.performUpkeep(id, "0x", {from: keeper1})
+        const after = (await registry.getKeeperInfo(keeper1)).balance
+        const difference = after.sub(before)
+        // 3500 is more gas then expected, but the ration is so far off that
+        // this should test the difference in gas without being an overly
+        // sensitive test.
+        assert.isTrue(linkForGas(3500).lt(difference))
+      })
+
+      it("reverts if the link price feed is stale", async () => {
+        const roundId = 99
+        const answer = 100
+        const updatedAt = 946684800 // New Years 2000 🥳
+        const startedAt = 946684799
+        await linkEthFeed.updateRoundData(roundId, answer, updatedAt, startedAt, {from: owner})
+
+        const before = (await registry.getKeeperInfo(keeper1)).balance
+        const { receipt } = await registry.performUpkeep(id, "0x", {from: keeper1})
+        const after = (await registry.getKeeperInfo(keeper1)).balance
+        const difference = after.sub(before)
+        // 3500 is more gas then expected, but the ration is so far off that
+        // this should test the difference in gas without being an overly
+        // sensitive test.
+        assert.isTrue(linkForGas(3500).lt(difference))
       })
     })
   })
