@@ -516,7 +516,7 @@ contract('UpkeepRegistry', (accounts) => {
     it('reverts if the ID is not valid', async () => {
       await expectRevert(
         registry.cancelRegistration(id + 1, { from: owner }),
-        'invalid upkeep id'
+        'cannot cancel upkeep'
       )
     })
 
@@ -562,6 +562,15 @@ contract('UpkeepRegistry', (accounts) => {
           'invalid upkeep id'
         )
       })
+
+      it('reverts if called multiple times', async () => {
+        await registry.cancelRegistration(id, { from: owner })
+
+        await expectRevert(
+          registry.cancelRegistration(id, { from: owner }),
+          'cannot cancel upkeep'
+        )
+      })
     })
 
     describe("when called by the admin", async () => {
@@ -604,6 +613,15 @@ contract('UpkeepRegistry', (accounts) => {
         await expectRevert(
           registry.performUpkeep(id, "0x", { from: keeper2 }),
           'invalid upkeep id'
+        )
+      })
+
+      it('reverts if called multiple times', async () => {
+        await registry.cancelRegistration(id, { from: admin })
+
+        await expectRevert(
+          registry.cancelRegistration(id, { from: admin }),
+          'cannot cancel upkeep'
         )
       })
     })

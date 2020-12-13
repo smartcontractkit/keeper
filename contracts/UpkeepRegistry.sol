@@ -335,8 +335,8 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
     uint256 id
   )
     external
-    validateRegistration(id)
   {
+    require(s_registrations[id].maxValidBlocknumber == UINT64_MAX, "cannot cancel upkeep");
     bool isOwner = msg.sender == owner;
     require(isOwner|| msg.sender == s_registrations[id].admin, "only owner or admin");
 
