@@ -28,9 +28,9 @@ contract UpkeepRegistry is Owned {
   AggregatorV3Interface public immutable LINKETH;
   AggregatorV3Interface public immutable FASTGAS;
 
-  uint256 public registrationCount;
+  uint256 private s_registrationCount;
   uint256[] private s_canceledRegistrations;
-  address[] private s_keeperList;
+  address[] private s_keepers;
   mapping(uint256 => Registration) private s_registrations;
   mapping(address => KeeperInfo) private s_keeperInfo;
   mapping(address => address) private s_proposedPayee;
@@ -200,8 +200,8 @@ contract UpkeepRegistry is Owned {
     external
     onlyOwner()
   {
-    for (uint256 i = 0; i < s_keeperList.length; i++) {
-      address keeper = s_keeperList[i];
+    for (uint256 i = 0; i < s_keepers.length; i++) {
+      address keeper = s_keepers[i];
       s_keeperInfo[keeper].active = false;
     }
     for (uint256 i = 0; i < keepers.length; i++) {
@@ -213,21 +213,21 @@ contract UpkeepRegistry is Owned {
       s_keeper.payee = newPayee;
       s_keeper.active = true;
     }
-    s_keeperList = keepers;
+    s_keepers = keepers;
     emit KeepersUpdated(keepers, payees);
   }
 
-  function keepers()
+  function getKeepers()
     external
     view
     returns (
       address[] memory
     )
   {
-    return s_keeperList;
+    return s_keepers;
   }
 
-  function keeperInfo(
+  function getKeeperInfo(
     address query
   )
     external
@@ -255,7 +255,7 @@ contract UpkeepRegistry is Owned {
     require(gasLimit > CALL_GAS_MIN, "min gas is 2300");
     require(gasLimit <= CALL_GAS_MAX, "max gas is 2500000");
 
-    uint256 id = registrationCount;
+    uint256 id = s_registrationCount;
     s_registrations[id] = Registration({
       target: target,
       executeGas: gasLimit,
@@ -264,7 +264,7 @@ contract UpkeepRegistry is Owned {
       validUntilHeight: UINT64_MAX,
       checkData: queryData
     });
-    registrationCount++;
+    s_registrationCount++;
 
     emit UpkeepRegistered(id, gasLimit, admin);
   }
@@ -415,7 +415,7 @@ contract UpkeepRegistry is Owned {
     LINK.transfer(to, keeper.balance);
   }
 
-  function canceledRegistrations()
+  function getCanceledRegistrations()
     external
     view
     returns (
@@ -425,7 +425,7 @@ contract UpkeepRegistry is Owned {
     return s_canceledRegistrations;
   }
 
-  function registration(
+  function getRegistration(
     uint256 id
   )
     external
@@ -448,6 +448,43 @@ contract UpkeepRegistry is Owned {
       reg.validUntilHeight,
       reg.checkData
     );
+  }
+
+  function transferPayeeship(
+    address keeper,
+    address proposed
+  )
+    external
+  {
+    require(s_keeperInfo[keeper].payee == msg.sender, "only callable by payee");
+    require(proposed != msg.sender, "cannot transfer to self");
+
+    if (s_proposedPayee[keeper] != proposed) {
+      s_proposedPayee[keeper] = proposed;
+      emit PayeeshipTransferRequested(keeper, msg.sender, proposed);
+    }
+  }
+
+  function getRegistrationCount()
+    external
+    returns (
+      uint256
+    )
+  {
+    return s_registrationCount;
+  }
+
+  function acceptPayeeship(
+    address keeper
+  )
+    external
+  {
+    require(s_proposedPayee[keeper] == msg.sender, "only callable by proposed payee");
+    address past = s_keeperInfo[keeper].payee;
+    s_keeperInfo[keeper].payee = msg.sender;
+    s_proposedPayee[keeper] = ZERO_ADDRESS;
+
+    emit PayeeshipTransferred(keeper, past, msg.sender);
   }
 
   // PRIVATE
@@ -482,34 +519,6 @@ contract UpkeepRegistry is Owned {
     payment = linkForGas.add(linkForGas.mul(_config.paymentPremiumPPT).div(PPT_BASE));
 
     return (payment, gasWei, linkEth);
-  }
-
-  function transferPayeeship(
-    address keeper,
-    address proposed
-  )
-    external
-  {
-    require(s_keeperInfo[keeper].payee == msg.sender, "only callable by payee");
-    require(proposed != msg.sender, "cannot transfer to self");
-
-    if (s_proposedPayee[keeper] != proposed) {
-      s_proposedPayee[keeper] = proposed;
-      emit PayeeshipTransferRequested(keeper, msg.sender, proposed);
-    }
-  }
-
-  function acceptPayeeship(
-    address keeper
-  )
-    external
-  {
-    require(s_proposedPayee[keeper] == msg.sender, "only callable by proposed payee");
-    address past = s_keeperInfo[keeper].payee;
-    s_keeperInfo[keeper].payee = msg.sender;
-    s_proposedPayee[keeper] = ZERO_ADDRESS;
-
-    emit PayeeshipTransferred(keeper, past, msg.sender);
   }
 
 
