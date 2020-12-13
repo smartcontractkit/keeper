@@ -417,6 +417,9 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
     Registration memory registration = s_registrations[id];
     uint256 gasLimit = registration.executeGas;
     (int256 gasWei, int256 linkEth) = getFeedData();
+    if (gasWei > int256(tx.gasprice)) {
+      gasWei = int256(tx.gasprice);
+    }
     uint256 payment = calculatePaymentAmount(gasLimit, gasWei, linkEth);
     require(registration.balance >= payment, "!executable");
     uint256  gasUsed = gasleft();
