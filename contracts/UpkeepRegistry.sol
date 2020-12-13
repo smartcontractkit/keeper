@@ -33,6 +33,7 @@ contract UpkeepRegistry is Owned {
   Config private s_config;
   int256 private s_fallbackGasPrice;  // not in config object for gas savings
   int256 private s_fallbackLinkPrice; // not in config object for gas savings
+  bool private s_unentered = true;
 
   IERC20 public immutable LINK;
   AggregatorV3Interface public immutable LINKETH;
@@ -352,6 +353,7 @@ contract UpkeepRegistry is Owned {
     bytes calldata performData
   )
     external
+    cannotReenter()
     validateKeeper()
     validateRegistration(id)
   {
@@ -553,6 +555,14 @@ contract UpkeepRegistry is Owned {
   {
     require(s_keeperInfo[msg.sender].active, "only active keepers");
     _;
+  }
+
+  modifier cannotReenter()
+  {
+    require(s_unentered, "cannot re-enter");
+    s_unentered = false;
+    _;
+    s_unentered = true;
   }
 
 }
