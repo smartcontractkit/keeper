@@ -309,7 +309,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
     onlyOwner()
   {
     require(target.isContract(), "target is not a contract");
-    require(gasLimit > CALL_GAS_MIN, "min gas is 2300");
+    require(gasLimit >= CALL_GAS_MIN, "min gas is 2300");
     require(gasLimit <= CALL_GAS_MAX, "max gas is 2500000");
 
     uint256 id = s_registrationCount;
