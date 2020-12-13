@@ -21,8 +21,8 @@ contract('UpkeepRegistry', (accounts) => {
   const gasWei = new BN(100)
   const linkDivisibility = new BN("1000000000000000000")
   const executeGas = new BN('100000')
-  const paymentPremiumPPT = new BN('25000')
-  const paymentPremiumBase = new BN('100000')
+  const paymentPremiumBase = new BN('1000000000')
+  const paymentPremiumPPB =  new BN('250000000')
   const checkFrequencyBlocks = new BN(3)
   const emptyBytes = '0x00'
   const zeroAddress = constants.ZERO_ADDRESS
@@ -37,7 +37,7 @@ contract('UpkeepRegistry', (accounts) => {
   linkForGas = (upkeepGasSpent) => {
     const gasSpent = registryGasOverhead.add(new BN(upkeepGasSpent))
     const base = gasWei.mul(gasSpent).mul(linkDivisibility).div(linkEth)
-    const premium = base.mul(paymentPremiumPPT).div(paymentPremiumBase)
+    const premium = base.mul(paymentPremiumPPB).div(paymentPremiumBase)
     return base.add(premium)
   }
 
@@ -51,7 +51,7 @@ contract('UpkeepRegistry', (accounts) => {
       linkToken.address,
       linkEthFeed.address,
       gasPriceFeed.address,
-      paymentPremiumPPT,
+      paymentPremiumPPB,
       checkFrequencyBlocks,
       maxCheckGas,
       stalenessSeconds,
@@ -742,7 +742,7 @@ contract('UpkeepRegistry', (accounts) => {
 
     it("updates the config", async () => {
       const old = await registry.getConfig()
-      assert.isTrue(paymentPremiumPPT.eq(old.paymentPremiumPPT))
+      assert.isTrue(paymentPremiumPPB.eq(old.paymentPremiumPPB))
       assert.isTrue(checkFrequencyBlocks.eq(old.checkFrequencyBlocks))
       assert.isTrue(stalenessSeconds.eq(old.stalenessSeconds))
 
@@ -757,7 +757,7 @@ contract('UpkeepRegistry', (accounts) => {
       )
 
       const updated = await registry.getConfig()
-      assert.isTrue(updated.paymentPremiumPPT.eq(payment))
+      assert.isTrue(updated.paymentPremiumPPB.eq(payment))
       assert.isTrue(updated.checkFrequencyBlocks.eq(checks))
       assert.isTrue(updated.stalenessSeconds.eq(staleness))
       assert.isTrue(updated.checkMaxGas.eq(maxGas))
@@ -776,7 +776,7 @@ contract('UpkeepRegistry', (accounts) => {
         { from: owner }
       )
       expectEvent(receipt, 'ConfigSet', {
-        paymentPremiumPPT: payment,
+        paymentPremiumPPB: payment,
         checkFrequencyBlocks: checks,
         checkMaxGas: maxGas,
         stalenessSeconds: staleness,

@@ -9,6 +9,10 @@ import "@openzeppelin/contracts/utils/Address.sol";
 import "./UpkeepBase.sol";
 import "./UpkeepInterface.sol";
 
+/**
+  * @notice Registry for adding work for Chainlink Keepers to perform on client
+  * contracts. Clients must support the Upkeep interface.
+*/
 contract UpkeepRegistry is Owned, UpkeepBase {
   using Address for address;
   using SafeERC20 for IERC20;
@@ -21,7 +25,7 @@ contract UpkeepRegistry is Owned, UpkeepBase {
   uint256 constant private CALL_GAS_MIN = 2_300;
   uint256 constant private CALL_GAS_MAX = 2_500_000;
   uint256 constant private CANCELATION_DELAY = 50;
-  uint24 constant private PPT_BASE = 100_000;
+  uint32 constant private PPB_BASE = 1_000_000_000;
   uint256 constant private LINK_DIVISIBILITY = 1e18;
   uint256 constant private REGISTRY_GAS_OVERHEAD = 65_000;
 
@@ -37,8 +41,8 @@ contract UpkeepRegistry is Owned, UpkeepBase {
   bool private s_unentered = true;
 
   IERC20 public immutable LINK;
-  AggregatorV3Interface public immutable LINKETH;
-  AggregatorV3Interface public immutable FASTGAS;
+  AggregatorV3Interface public immutable LINK_ETH_FEED;
+  AggregatorV3Interface public immutable FAST_GAS_FEED;
 
   struct Registration {
     address target;
@@ -56,7 +60,7 @@ contract UpkeepRegistry is Owned, UpkeepBase {
   }
 
   struct Config {
-    uint24 paymentPremiumPPT;
+    uint32 paymentPremiumPPB;
     uint24 checkFrequencyBlocks;
     uint32 checkMaxGas;
     uint24 stalenessSeconds;
@@ -86,7 +90,7 @@ contract UpkeepRegistry is Owned, UpkeepBase {
     address[] payees
   );
   event ConfigSet(
-    uint24 paymentPremiumPPT,
+    uint32 paymentPremiumPPB,
     uint24 checkFrequencyBlocks,
     uint32 checkMaxGas,
     uint24 stalenessSeconds,
@@ -115,11 +119,25 @@ contract UpkeepRegistry is Owned, UpkeepBase {
     address indexed to
   );
 
+  /*
+   * @param link the address of the LINK Token
+   * @param _reasonableGasPrice transmitter will receive reward for gas prices under this value
+   * @param _microLinkPerEth reimbursement per ETH of gas cost, in 1e-6LINK units
+   * @param _linkGweiPerObservation reward to oracle for contributing an observation to a successfully transmitted report, in 1e-9LINK units
+   * @param _linkGweiPerTransmission reward to transmitter of a successful report, in 1e-9LINK units
+   * @param _link address of the LINK contract
+   * @param _validator address of validator contract (must satisfy AggregatorValidatorInterface)
+   * @param _minAnswer lowest answer the median of a report is allowed to be
+   * @param _maxAnswer highest answer the median of a report is allowed to be
+   * @param _billingAdminAccessController access controller for billing admin functions
+   * @param _decimals answers are stored in fixed-point format, with this many digits of precision
+   * @param _description short human-readable description of observable this contract's answers pertain to
+   */
   constructor(
     address link,
     address linkEth,
     address fastGas,
-    uint24 paymentPremiumPPT,
+    uint32 paymentPremiumPPB,
     uint24 checkFrequencyBlocks,
     uint32 checkMaxGas,
     uint24 stalenessSeconds,
@@ -133,7 +151,7 @@ contract UpkeepRegistry is Owned, UpkeepBase {
     FASTGAS = AggregatorV3Interface(fastGas);
 
     setConfig(
-      paymentPremiumPPT,
+      paymentPremiumPPB,
       checkFrequencyBlocks,
       checkMaxGas,
       stalenessSeconds,
@@ -143,7 +161,7 @@ contract UpkeepRegistry is Owned, UpkeepBase {
   }
 
   function setConfig(
-    uint24 paymentPremiumPPT,
+    uint32 paymentPremiumPPB,
     uint24 checkFrequencyBlocks,
     uint32 checkMaxGas,
     uint24 stalenessSeconds,
@@ -154,7 +172,7 @@ contract UpkeepRegistry is Owned, UpkeepBase {
     public
   {
     s_config = Config({
-      paymentPremiumPPT: paymentPremiumPPT,
+      paymentPremiumPPB: paymentPremiumPPB,
       checkFrequencyBlocks: checkFrequencyBlocks,
       checkMaxGas: checkMaxGas,
       stalenessSeconds: stalenessSeconds
@@ -163,7 +181,7 @@ contract UpkeepRegistry is Owned, UpkeepBase {
     s_fallbackLinkPrice = fallbackLinkPrice;
 
     emit ConfigSet(
-      paymentPremiumPPT,
+      paymentPremiumPPB,
       checkFrequencyBlocks,
       checkMaxGas,
       stalenessSeconds,
@@ -176,7 +194,7 @@ contract UpkeepRegistry is Owned, UpkeepBase {
     external
     view
     returns (
-      uint24 paymentPremiumPPT,
+      uint32 paymentPremiumPPB,
       uint24 checkFrequencyBlocks,
       uint32 checkMaxGas,
       uint24 stalenessSeconds,
@@ -186,7 +204,7 @@ contract UpkeepRegistry is Owned, UpkeepBase {
   {
     Config memory config = s_config;
     return (
-      config.paymentPremiumPPT,
+      config.paymentPremiumPPB,
       config.checkFrequencyBlocks,
       config.checkMaxGas,
       config.stalenessSeconds,
@@ -506,11 +524,11 @@ contract UpkeepRegistry is Owned, UpkeepBase {
     uint32 stalenessSeconds = s_config.stalenessSeconds;
     bool staleFallback = stalenessSeconds > 0;
     uint256 timestamp;
-    (,gasWei,,timestamp,) = FASTGAS.latestRoundData();
+    (,gasWei,,timestamp,) = FAST_GAS_FEED.latestRoundData();
     if (staleFallback && stalenessSeconds < block.timestamp - timestamp) {
       gasWei = s_fallbackGasPrice;
     }
-    (,linkEth,,timestamp,) = LINKETH.latestRoundData();
+    (,linkEth,,timestamp,) = LINK_ETH_FEED.latestRoundData();
     if (staleFallback && stalenessSeconds < block.timestamp - timestamp) {
       linkEth = s_fallbackLinkPrice;
     }
@@ -533,7 +551,7 @@ contract UpkeepRegistry is Owned, UpkeepBase {
     // always fit a uint256.
     uint256 weiForGas = uint256(gasWei).mul(gasLimit.add(REGISTRY_GAS_OVERHEAD));
     uint256 linkForGas = weiForGas.mul(LINK_DIVISIBILITY).div(uint256(linkEth));
-    return linkForGas.add(linkForGas.mul(s_config.paymentPremiumPPT).div(PPT_BASE));
+    return linkForGas.add(linkForGas.mul(s_config.paymentPremiumPPB).div(PPB_BASE));
   }
 
 
