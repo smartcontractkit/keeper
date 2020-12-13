@@ -49,7 +49,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
     uint32 executeGas;
     uint96 balance;
     address admin;
-    uint64 validUntilHeight;
+    uint64 maxValidBlocknumber;
     address lastKeeper;
     bytes checkData;
   }
@@ -63,7 +63,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
   struct Config {
     uint32 paymentPremiumPPB;
     uint24 checkFrequencyBlocks;
-    uint32 checkMaxGas;
+    uint32 checkGasLimit;
     uint24 stalenessSeconds;
   }
 
@@ -93,7 +93,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
   event ConfigSet(
     uint32 paymentPremiumPPB,
     uint24 checkFrequencyBlocks,
-    uint32 checkMaxGas,
+    uint32 checkGasLimit,
     uint24 stalenessSeconds,
     int256 fallbackGasPrice,
     int256 fallbackLinkPrice
@@ -128,7 +128,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
    * being reimbursed for gas, measured in parts per thousand
    * @param checkFrequencyBlocks number of blocks an oracle should wait before
    * checking for upkeep
-   * @param checkMaxGas gas limit when checking for upkeep
+   * @param checkGasLimit gas limit when checking for upkeep
    * @param stalenessSeconds number of seconds that is allowed for feed data to
    * be stale before switching to the fallback pricing
    * @param fallbackGasPrice gas price used if the gas price feed is stale
@@ -140,7 +140,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
     address fastGasFeed,
     uint32 paymentPremiumPPB,
     uint24 checkFrequencyBlocks,
-    uint32 checkMaxGas,
+    uint32 checkGasLimit,
     uint24 stalenessSeconds,
     int256 fallbackGasPrice,
     int256 fallbackLinkPrice
@@ -154,7 +154,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
     setConfig(
       paymentPremiumPPB,
       checkFrequencyBlocks,
-      checkMaxGas,
+      checkGasLimit,
       stalenessSeconds,
       fallbackGasPrice,
       fallbackLinkPrice
@@ -167,7 +167,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
    * being reimbursed for gas, measured in parts per thousand
    * @param checkFrequencyBlocks number of blocks an oracle should wait before
    * checking for upkeep
-   * @param checkMaxGas gas limit when checking for upkeep
+   * @param checkGasLimit gas limit when checking for upkeep
    * @param stalenessSeconds number of seconds that is allowed for feed data to
    * be stale before switching to the fallback pricing
    * @param fallbackGasPrice gas price used if the gas price feed is stale
@@ -176,7 +176,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
   function setConfig(
     uint32 paymentPremiumPPB,
     uint24 checkFrequencyBlocks,
-    uint32 checkMaxGas,
+    uint32 checkGasLimit,
     uint24 stalenessSeconds,
     int256 fallbackGasPrice,
     int256 fallbackLinkPrice
@@ -187,7 +187,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
     s_config = Config({
       paymentPremiumPPB: paymentPremiumPPB,
       checkFrequencyBlocks: checkFrequencyBlocks,
-      checkMaxGas: checkMaxGas,
+      checkGasLimit: checkGasLimit,
       stalenessSeconds: stalenessSeconds
     });
     s_fallbackGasPrice = fallbackGasPrice;
@@ -196,7 +196,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
     emit ConfigSet(
       paymentPremiumPPB,
       checkFrequencyBlocks,
-      checkMaxGas,
+      checkGasLimit,
       stalenessSeconds,
       fallbackGasPrice,
       fallbackLinkPrice
@@ -212,7 +212,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
     returns (
       uint32 paymentPremiumPPB,
       uint24 checkFrequencyBlocks,
-      uint32 checkMaxGas,
+      uint32 checkGasLimit,
       uint24 stalenessSeconds,
       int256 fallbackGasPrice,
       int256 fallbackLinkPrice
@@ -222,7 +222,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
     return (
       config.paymentPremiumPPB,
       config.checkFrequencyBlocks,
-      config.checkMaxGas,
+      config.checkGasLimit,
       config.stalenessSeconds,
       s_fallbackGasPrice,
       s_fallbackLinkPrice
@@ -317,7 +317,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
       executeGas: gasLimit,
       balance: 0,
       admin: admin,
-      validUntilHeight: UINT64_MAX,
+      maxValidBlocknumber: UINT64_MAX,
       lastKeeper: address(0),
       checkData: queryData
     });
@@ -343,7 +343,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
     if (!isOwner) {
       height = height.add(CANCELATION_DELAY);
     }
-    s_registrations[id].validUntilHeight = uint64(height);
+    s_registrations[id].maxValidBlocknumber = uint64(height);
     s_canceledRegistrations.push(id);
 
     emit RegistrationCanceled(id, uint64(height));
@@ -374,7 +374,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
     (
       bool success,
       bytes memory result
-    ) = registration.target.call{gas: s_config.checkMaxGas}(callData);
+    ) = registration.target.call{gas: s_config.checkGasLimit}(callData);
     if (!success) {
       return (false, performData, 0, 0, 0, 0);
     }
@@ -462,7 +462,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
     external
   {
     require(s_registrations[id].admin == msg.sender, "only callable by admin");
-    require(s_registrations[id].validUntilHeight <= block.number, "registration must be canceled");
+    require(s_registrations[id].maxValidBlocknumber <= block.number, "registration must be canceled");
 
     s_registrations[id].balance = uint96(uint256(s_registrations[id].balance).sub(amount));
     emit FundsWithdrawn(id, amount, to);
@@ -505,7 +505,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
       uint32 executeGas,
       uint96 balance,
       address admin,
-      uint64 validUntilHeight,
+      uint64 maxValidBlocknumber,
       bytes memory checkData
     )
   {
@@ -515,7 +515,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
       reg.executeGas,
       reg.balance,
       reg.admin,
-      reg.validUntilHeight,
+      reg.maxValidBlocknumber,
       reg.checkData
     );
   }
@@ -607,7 +607,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
   modifier validateRegistration(
     uint256 id
   ) {
-    require(s_registrations[id].validUntilHeight > block.number, "invalid upkeep id");
+    require(s_registrations[id].maxValidBlocknumber > block.number, "invalid upkeep id");
     _;
   }
 

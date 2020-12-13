@@ -192,7 +192,7 @@ contract('UpkeepRegistry', (accounts) => {
       assert.equal(mock.address, registration.target)
       assert.equal(0, registration.balance)
       assert.equal(emptyBytes, registration.checkData)
-      assert.equal(0xffffffffffffffff, registration.validUntilHeight)
+      assert.equal(0xffffffffffffffff, registration.maxValidBlocknumber)
     })
   })
 
@@ -533,7 +533,7 @@ contract('UpkeepRegistry', (accounts) => {
         const { receipt } = await registry.cancelRegistration(id, { from: owner })
 
         const registration = await registry.getRegistration(id)
-        assert.equal(registration.validUntilHeight.toNumber(), receipt.blockNumber)
+        assert.equal(registration.maxValidBlocknumber.toNumber(), receipt.blockNumber)
       })
 
       it('emits an event', async () => {
@@ -571,7 +571,7 @@ contract('UpkeepRegistry', (accounts) => {
       it('sets the registration to invalid in 50 blocks', async () => {
         const { receipt } = await registry.cancelRegistration(id, { from: admin })
         const registration = await registry.getRegistration(id)
-        assert.isFalse(registration.validUntilHeight.eq(receipt.blockNumber + 50))
+        assert.isFalse(registration.maxValidBlocknumber.eq(receipt.blockNumber + 50))
       })
 
       it('emits an event', async () => {
@@ -774,7 +774,7 @@ contract('UpkeepRegistry', (accounts) => {
       assert.isTrue(updated.paymentPremiumPPB.eq(payment))
       assert.isTrue(updated.checkFrequencyBlocks.eq(checks))
       assert.isTrue(updated.stalenessSeconds.eq(staleness))
-      assert.isTrue(updated.checkMaxGas.eq(maxGas))
+      assert.isTrue(updated.checkGasLimit.eq(maxGas))
       assert.isTrue(updated.fallbackGasPrice.eq(fbGasEth))
       assert.isTrue(updated.fallbackLinkPrice.eq(fbLinkEth))
     })
@@ -792,7 +792,7 @@ contract('UpkeepRegistry', (accounts) => {
       expectEvent(receipt, 'ConfigSet', {
         paymentPremiumPPB: payment,
         checkFrequencyBlocks: checks,
-        checkMaxGas: maxGas,
+        checkGasLimit: maxGas,
         stalenessSeconds: staleness,
         fallbackGasPrice: fbGasEth,
         fallbackLinkPrice: fbLinkEth,
