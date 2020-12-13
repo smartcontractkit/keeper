@@ -364,19 +364,17 @@ contract UpkeepRegistry is Owned {
 
   function withdrawPayment(
     address from,
-    uint256 amount,
     address to
   )
     external
   {
     KeeperInfo memory keeper = s_keeperInfo[from];
     require(keeper.payee == msg.sender, "only callable by payee");
-    require(keeper.balance >= amount, "insufficient balance");
 
-    s_keeperInfo[from].balance = uint96(uint256(keeper.balance).sub(amount));
-    emit PaymentWithdrawn(from, amount, to, msg.sender);
+    s_keeperInfo[from].balance = 0;
+    emit PaymentWithdrawn(from, keeper.balance, to, msg.sender);
 
-    LINK.transfer(to, amount);
+    LINK.transfer(to, keeper.balance);
   }
 
   function canceledRegistrations()
