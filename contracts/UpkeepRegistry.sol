@@ -35,6 +35,8 @@ contract UpkeepRegistry is Owned {
   mapping(address => KeeperInfo) private s_keeperInfo;
   mapping(address => address) private s_proposedPayee;
   Config private s_config;
+  int256 private s_fallbackGasPrice;  // not in config object for gas savings
+  int256 private s_fallbackLinkPrice; // not in config object for gas savings
 
   struct Registration {
     address target;
@@ -54,7 +56,8 @@ contract UpkeepRegistry is Owned {
   struct Config {
     uint24 paymentPremiumPPT;
     uint24 checkFrequencyBlocks;
-    uint64 stalenessSeconds;
+    uint32 checkMaxGas;
+    uint24 stalenessSeconds;
   }
 
   event UpkeepRegistered(
@@ -80,10 +83,13 @@ contract UpkeepRegistry is Owned {
     address[] keepers,
     address[] payees
   );
-  event ConfigUpdated(
+  event ConfigSet(
     uint24 paymentPremiumPPT,
     uint24 checkFrequencyBlocks,
-    uint64 stalenessSeconds
+    uint32 checkMaxGas,
+    uint24 stalenessSeconds,
+    int256 fallbackGasPrice,
+    int256 fallbackLinkPrice
   );
   event FundsWithdrawn(
     uint256 indexed id,
@@ -113,7 +119,10 @@ contract UpkeepRegistry is Owned {
     address fastGas,
     uint24 paymentPremiumPPT,
     uint24 checkFrequencyBlocks,
-    uint64 stalenessSeconds
+    uint32 checkMaxGas,
+    uint24 stalenessSeconds,
+    int256 fallbackGasPrice,
+    int256 fallbackLinkPrice
   )
     public
   {
@@ -121,13 +130,23 @@ contract UpkeepRegistry is Owned {
     LINKETH = AggregatorV3Interface(linkEth);
     FASTGAS = AggregatorV3Interface(fastGas);
 
-    setConfig(paymentPremiumPPT, checkFrequencyBlocks, stalenessSeconds);
+    setConfig(
+      paymentPremiumPPT,
+      checkFrequencyBlocks,
+      checkMaxGas,
+      stalenessSeconds,
+      fallbackGasPrice,
+      fallbackLinkPrice
+    );
   }
 
   function setConfig(
     uint24 paymentPremiumPPT,
     uint24 checkFrequencyBlocks,
-    uint64 stalenessSeconds
+    uint32 checkMaxGas,
+    uint24 stalenessSeconds,
+    int256 fallbackGasPrice,
+    int256 fallbackLinkPrice
   )
     onlyOwner()
     public
@@ -135,26 +154,42 @@ contract UpkeepRegistry is Owned {
     s_config = Config({
       paymentPremiumPPT: paymentPremiumPPT,
       checkFrequencyBlocks: checkFrequencyBlocks,
+      checkMaxGas: checkMaxGas,
       stalenessSeconds: stalenessSeconds
     });
+    s_fallbackGasPrice = fallbackGasPrice;
+    s_fallbackLinkPrice = fallbackLinkPrice;
 
-    ConfigUpdated(paymentPremiumPPT, checkFrequencyBlocks, stalenessSeconds);
+    emit ConfigSet(
+      paymentPremiumPPT,
+      checkFrequencyBlocks,
+      checkMaxGas,
+      stalenessSeconds,
+      fallbackGasPrice,
+      fallbackLinkPrice
+    );
   }
 
-  function config()
+  function getConfig()
     external
     view
     returns (
       uint24 paymentPremiumPPT,
       uint24 checkFrequencyBlocks,
-      uint64 stalenessSeconds
+      uint32 checkMaxGas,
+      uint24 stalenessSeconds,
+      int256 fallbackGasPrice,
+      int256 fallbackLinkPrice
     )
   {
-    Config memory _config = s_config;
+    Config memory config = s_config;
     return (
-      _config.paymentPremiumPPT,
-      _config.checkFrequencyBlocks,
-      _config.stalenessSeconds
+      config.paymentPremiumPPT,
+      config.checkFrequencyBlocks,
+      config.checkMaxGas,
+      config.stalenessSeconds,
+      s_fallbackGasPrice,
+      s_fallbackLinkPrice
     );
   }
 

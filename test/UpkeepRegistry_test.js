@@ -29,6 +29,9 @@ contract('UpkeepRegistry', (accounts) => {
   const extraGas = new BN('250000')
   const registryGasOverhead = new BN('65000')
   const stalenessSeconds = new BN(43820)
+  const maxCheckGas = new BN(20000000)
+  const fallbackGasPrice = new BN(600000000)
+  const fallbackLinkPrice = new BN(200)
   let linkToken, linkEthFeed, gasPriceFeed, registry, mock, id
 
   linkForGas = (upkeepGasSpent) => {
@@ -50,7 +53,10 @@ contract('UpkeepRegistry', (accounts) => {
       gasPriceFeed.address,
       paymentPremiumPPT,
       checkFrequencyBlocks,
+      maxCheckGas,
       stalenessSeconds,
+      fallbackGasPrice,
+      fallbackLinkPrice,
       { from: owner }
     )
     mock = await UpkeptMock.new()
@@ -715,34 +721,67 @@ contract('UpkeepRegistry', (accounts) => {
     const payment = new BN(1)
     const checks = new BN(2)
     const staleness = new BN(3)
+    const maxGas = new BN(4)
+    const fbGasEth = new BN(5)
+    const fbLinkEth = new BN(6)
 
     it("reverts when called by anyone but the proposed owner", async () => {
       await expectRevert(
-        registry.setConfig(payment, checks, staleness, { from: payee1 }),
+        registry.setConfig(
+          payment,
+          checks,
+          maxGas,
+          staleness,
+          fbGasEth,
+          fbLinkEth,
+          { from: payee1 }
+        ),
         "Only callable by owner"
       )
     })
 
     it("updates the config", async () => {
-      const old = await registry.config()
+      const old = await registry.getConfig()
       assert.isTrue(paymentPremiumPPT.eq(old.paymentPremiumPPT))
       assert.isTrue(checkFrequencyBlocks.eq(old.checkFrequencyBlocks))
       assert.isTrue(stalenessSeconds.eq(old.stalenessSeconds))
 
-      await registry.setConfig(payment, checks, staleness)
+      await registry.setConfig(
+        payment,
+        checks,
+        maxGas,
+        staleness,
+        fbGasEth,
+        fbLinkEth,
+        { from: owner }
+      )
 
-      const updated = await registry.config()
+      const updated = await registry.getConfig()
       assert.isTrue(updated.paymentPremiumPPT.eq(payment))
       assert.isTrue(updated.checkFrequencyBlocks.eq(checks))
       assert.isTrue(updated.stalenessSeconds.eq(staleness))
+      assert.isTrue(updated.checkMaxGas.eq(maxGas))
+      assert.isTrue(updated.fallbackGasPrice.eq(fbGasEth))
+      assert.isTrue(updated.fallbackLinkPrice.eq(fbLinkEth))
     })
 
     it("emits an event", async () => {
-      const { receipt } = await registry.setConfig(payment, checks, staleness)
-      expectEvent(receipt, 'ConfigUpdated', {
+      const { receipt } = await registry.setConfig(
+        payment,
+        checks,
+        maxGas,
+        staleness,
+        fbGasEth,
+        fbLinkEth,
+        { from: owner }
+      )
+      expectEvent(receipt, 'ConfigSet', {
         paymentPremiumPPT: payment,
         checkFrequencyBlocks: checks,
-        stalenessSeconds: staleness
+        checkMaxGas: maxGas,
+        stalenessSeconds: staleness,
+        fallbackGasPrice: fbGasEth,
+        fallbackLinkPrice: fbLinkEth,
       })
     })
   })
