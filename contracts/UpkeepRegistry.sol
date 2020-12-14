@@ -250,18 +250,17 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
       bool success
     )
   {
-    Registration storage s_registration = s_registrations[id];
-    uint256 gasLimit = s_registration.executeGas;
+    Registration memory registration = s_registrations[id];
+    uint256 gasLimit = registration.executeGas;
     (int256 gasWei, int256 linkEth) = getFeedData();
     uint96 payment = calculatePaymentAmount(gasLimit, gasWei, linkEth);
-    if (s_registration.balance < payment) {
+    if (registration.balance < payment) {
       return false;
     }
 
     bytes memory callData = abi.encodeWithSelector(PERFORM_SELECTOR, performData);
-    (success,) = s_registration.target.call{gas: gasLimit}(callData);
 
-    return success;
+    return callWithExactGas(gasLimit, registration.target, callData);
   }
 
   function performUpkeep(
