@@ -40,6 +40,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
   mapping(uint256 => Registration) private s_registrations;
   mapping(address => KeeperInfo) private s_keeperInfo;
   mapping(address => address) private s_proposedPayee;
+  mapping(uint256 => bytes) private s_checkData;
   Config private s_config;
   int256 private s_fallbackGasPrice;  // not in config object for gas savings
   int256 private s_fallbackLinkPrice; // not in config object for gas savings
@@ -55,7 +56,6 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
     address admin;
     uint64 maxValidBlocknumber;
     address lastKeeper;
-    bytes checkData;
   }
 
   struct KeeperInfo {
@@ -175,13 +175,13 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
    * @param gasLimit amount of gas to provide the target contract when
    * performing upkeep
    * @param admin address to cancel upkeep and withdraw remaining funds
-   * @param queryData data passed to the contract when checking for upkeep
+   * @param checkData data passed to the contract when checking for upkeep
    */
   function registerUpkeep(
     address target,
     uint32 gasLimit,
     address admin,
-    bytes calldata queryData
+    bytes calldata checkData
   )
     external
     onlyOwner()
@@ -197,9 +197,9 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
       balance: 0,
       admin: admin,
       maxValidBlocknumber: UINT64_MAX,
-      lastKeeper: address(0),
-      checkData: queryData
+      lastKeeper: address(0)
     });
+    s_checkData[id] = checkData;
     s_registrationCount++;
 
     emit UpkeepRegistered(id, gasLimit, admin);
@@ -227,7 +227,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
       return (false, performData, 0, 0, 0, 0);
     }
 
-    bytes memory callData = abi.encodeWithSelector(CHECK_SELECTOR, registration.checkData);
+    bytes memory callData = abi.encodeWithSelector(CHECK_SELECTOR, s_checkData[id]);
     (
       bool success,
       bytes memory result
