@@ -7,6 +7,7 @@ contract UpkeepReverter is UpkeepCompatible {
   function checkForUpkeep(bytes calldata data)
     public
     override
+    cannotExecute()
     returns (
       bool callable,
       bytes calldata executedata

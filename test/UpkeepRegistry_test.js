@@ -240,7 +240,7 @@ contract('UpkeepRegistry', (accounts) => {
       })
 
       it('returns false if the target cannot execute', async () => {
-        const mockResponse = await mock.checkForUpkeep.call("0x")
+        const mockResponse = await mock.checkForUpkeep.call("0x", { from: zeroAddress })
         assert.isFalse(mockResponse.callable)
         const check = await registry.checkForUpkeep.call(id, { from: zeroAddress })
         assert.isFalse(check.canPerform)
@@ -248,7 +248,7 @@ contract('UpkeepRegistry', (accounts) => {
 
       it('returns true with pricing info if the target can execute', async () => {
         await mock.setCanExecute(true)
-        const mockResponse = await mock.checkForUpkeep.call("0x")
+        const mockResponse = await mock.checkForUpkeep.call("0x", { from: zeroAddress })
         assert.isTrue(mockResponse.callable)
         const check = await registry.checkForUpkeep.call(id, {from: zeroAddress})
 
@@ -318,7 +318,7 @@ contract('UpkeepRegistry', (accounts) => {
       })
 
       it('does not revert if the target cannot execute', async () => {
-        const mockResponse = await mock.checkForUpkeep.call("0x")
+        const mockResponse = await mock.checkForUpkeep.call("0x", { from: zeroAddress })
         assert.isFalse(mockResponse.callable)
 
         await registry.performUpkeep(id, "0x", { from: keeper3 })
@@ -326,7 +326,7 @@ contract('UpkeepRegistry', (accounts) => {
 
       it('reverts if not enough gas supplied', async () => {
         await mock.setCanExecute(true)
-        const mockResponse = await mock.checkForUpkeep.call("0x")
+        const mockResponse = await mock.checkForUpkeep.call("0x", { from: zeroAddress })
         assert.isTrue(mockResponse.callable)
         await expectRevert.unspecified(
           registry.performUpkeep(id, "0x", { from: keeper1, gas: new BN('120000') })
@@ -335,7 +335,7 @@ contract('UpkeepRegistry', (accounts) => {
 
       it('executes the data passed to the registry', async () => {
         await mock.setCanExecute(true)
-        let mockResponse = await mock.checkForUpkeep.call("0x")
+        let mockResponse = await mock.checkForUpkeep.call("0x", { from: zeroAddress })
         assert.isTrue(mockResponse.callable)
 
         const performData = "0xc0ffeec0ffee"
@@ -345,7 +345,7 @@ contract('UpkeepRegistry', (accounts) => {
           success: true,
           performData: performData
         })
-        mockResponse = await mock.checkForUpkeep.call("0x")
+        mockResponse = await mock.checkForUpkeep.call("0x", { from: zeroAddress })
         assert.isFalse(mockResponse.callable) // updated contract state
       })
 

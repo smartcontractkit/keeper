@@ -16,6 +16,7 @@ contract UpkeepMock is UpkeepCompatible {
   function checkForUpkeep(bytes calldata data)
     external
     override
+    cannotExecute()
     returns (
       bool callable,
       bytes calldata executedata
