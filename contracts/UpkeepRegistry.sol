@@ -283,7 +283,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard, UpkeepRegistryKee
       gasWei = int256(tx.gasprice);
     }
     uint96 payment = calculatePaymentAmount(gasLimit, gasWei, linkEth);
-    require(upkeep.balance >= payment, "!executable");
+    require(upkeep.balance >= payment, "insufficient payment");
     require(upkeep.lastKeeper != msg.sender, "keepers must take turns");
 
     uint256  gasUsed = gasleft();

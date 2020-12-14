@@ -307,7 +307,7 @@ contract('UpkeepRegistry', (accounts) => {
     it('reverts if the registration is not funded', async () => {
       await expectRevert(
         registry.performUpkeep(id, "0x", { from: keeper2 }),
-        '!executable'
+        'insufficient payment'
       )
     })
 
