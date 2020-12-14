@@ -300,7 +300,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
 
   /*
    * @notice prevent an upkeep from being performed in the future
-   * @param id registration to be canceled
+   * @param id upkeep to be canceled
    */
   function cancelUpkeep(
     uint256 id
@@ -321,6 +321,12 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
     emit UpkeepCanceled(id, uint64(height));
   }
 
+  /*
+   * @notice adds LINK funding for an upkeep by tranferring from the sender's
+   * LINK balance
+   * @param id upkeep to fund
+   * @param amount number of LINK to transfer
+   */
   function addFunds(
     uint256 id,
     uint96 amount
@@ -333,6 +339,34 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
     emit FundsAdded(id, msg.sender, amount);
   }
 
+  /*
+   * @notice uses LINK's transferAndCall to LINK and add funding to an upkeep
+   * @dev safe to cast uint256 to uint96 as total LINK supply is under UINT96MAX
+   * @param sender the account which transferred the funds
+   * @param amount number of LINK transfer
+   */
+  function onTokenTransfer(
+    address sender,
+    uint256 amount,
+    bytes calldata data
+  )
+    external
+  {
+    require(msg.sender == address(LINK), "only callable through LINK");
+    require(data.length == 32, "data must be 32 bytes");
+    uint256 id = abi.decode(data, (uint256));
+    validateRegistration(id);
+
+    s_registrations[id].balance = s_registrations[id].balance.add(uint96(amount));
+
+    emit FundsAdded(id, sender, uint96(amount));
+  }
+
+  /*
+   * @notice removes funding from a cancelled upkeep
+   * @param id upkeep to withdraw funds from
+   * @param amount address to send remaining funds to
+   */
   function withdrawFunds(
     uint256 id,
     address to
@@ -349,6 +383,11 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
     LINK.transfer(to, amount);
   }
 
+  /*
+   * @notice withdraws a keeper's payment, callable only by the keeper's payee
+   * @param from keeper address
+   * @param to address to send the payment to
+   */
   function withdrawPayment(
     address from,
     address to
@@ -364,6 +403,11 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
     LINK.transfer(to, keeper.balance);
   }
 
+  /*
+   * @notice proposes the safe transfer of a keeper's payee to another address
+   * @param keeper address of the keeper to transfer payee role
+   * @param to address transfer payee role to
+   */
   function transferPayeeship(
     address keeper,
     address proposed
@@ -379,6 +423,10 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
     }
   }
 
+  /*
+   * @notice accepts the safe transfer of payee role for a keeper
+   * @param keeper address to accept the payee role for
+   */
   function acceptPayeeship(
     address keeper
   )
@@ -470,6 +518,9 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
 
   // GETTERS
 
+  /*
+   * @notice read all of the details about an upkeep
+   */
   function getUpkeep(
     uint256 id
   )
@@ -479,6 +530,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
       address target,
       uint32 executeGas,
       uint96 balance,
+      address lastKeeper,
       address admin,
       uint64 maxValidBlocknumber,
       bytes memory checkData
@@ -489,12 +541,16 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
       reg.target,
       reg.executeGas,
       reg.balance,
+      reg.lastKeeper,
       reg.admin,
       reg.maxValidBlocknumber,
       reg.checkData
     );
   }
 
+  /*
+   * @notice read the total number of upkeep's registered
+   */
   function getUpkeepCount()
     external
     view
@@ -575,6 +631,12 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
 
   // PRIVATE
 
+  /*
+   * @dev retrieves feed data for fast gas/eth and link/eth prices. if the feed data
+   * is stale it uses the configured fallback price. once a price is picked for
+   * gas it takes the min of gas price in the transaction or the fast gas price
+   * in order to reduce costs for the upkeep clients.
+   */
   function getFeedData()
     private
     view
@@ -597,6 +659,9 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
     return (gasWei, linkEth);
   }
 
+  /*
+   * @dev calculates LINK paid for gas spent plus a configure premium percentage
+   */
   function calculatePaymentAmount(
     uint256 gasLimit,
     int256 gasWei,
@@ -614,26 +679,6 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
     uint256 total = linkForGas.add(premium);
     require(total <= LINK_TOTAL_SUPPLY, "payment greater than all LINK");
     return uint96(total); // LINK_TOTAL_SUPPLY < UINT96_MAX
-  }
-
-  /*
-   * @dev safe to cast uint256 to uint96 as total LINK supply is under UINT96MAX
-   */
-  function onTokenTransfer(
-    address sender,
-    uint256 amount,
-    bytes calldata data
-  )
-    external
-  {
-    require(msg.sender == address(LINK), "only callable through LINK");
-    require(data.length == 32, "data must be 32 bytes");
-    uint256 id = abi.decode(data, (uint256));
-    validateRegistration(id);
-
-    s_registrations[id].balance = s_registrations[id].balance.add(uint96(amount));
-
-    emit FundsAdded(id, sender, uint96(amount));
   }
 
   /*
@@ -666,6 +711,9 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
     return success;
   }
 
+  /*
+   * @dev ensures a registration is valid
+   */
   function validateRegistration(
     uint256 id
   )
@@ -678,6 +726,9 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
 
   // MODIFIERS
 
+  /*
+   * @dev ensures a registration is valid
+   */
   modifier validRegistration(
     uint256 id
   ) {
@@ -685,6 +736,9 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
     _;
   }
 
+  /*
+   * @dev ensures a keeper is permissioned to peform upkeep
+   */
   modifier validateKeeper()
   {
     require(s_keeperInfo[msg.sender].active, "only active keepers");
