@@ -34,10 +34,10 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
   uint64 constant private UINT64_MAX = 2**64 - 1;
   uint96 constant private LINK_TOTAL_SUPPLY = 1e27;
 
-  uint256 private s_registrationCount;
-  uint256[] private s_canceledRegistrations;
-  address[] private s_keepers;
-  mapping(uint256 => Registration) private s_registrations;
+  uint256 private s_upkeepCount;
+  uint256[] private s_canceledUpkeepList;
+  address[] private s_keeperList;
+  mapping(uint256 => Upkeep) private s_upkeep;
   mapping(address => KeeperInfo) private s_keeperInfo;
   mapping(address => address) private s_proposedPayee;
   mapping(uint256 => bytes) private s_checkData;
@@ -49,7 +49,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
   AggregatorV3Interface public immutable LINK_ETH_FEED;
   AggregatorV3Interface public immutable FAST_GAS_FEED;
 
-  struct Registration {
+  struct Upkeep {
     address target;
     uint32 executeGas;
     uint96 balance;
@@ -170,7 +170,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
   // ACTIONS
 
   /*
-   * @notice adds a new registration for upkeep
+   * @notice adds a new upkeep
    * @param target address to peform upkeep on
    * @param gasLimit amount of gas to provide the target contract when
    * performing upkeep
@@ -190,8 +190,8 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
     require(gasLimit >= CALL_GAS_MIN, "min gas is 2300");
     require(gasLimit <= CALL_GAS_MAX, "max gas is 2500000");
 
-    uint256 id = s_registrationCount;
-    s_registrations[id] = Registration({
+    uint256 id = s_upkeepCount;
+    s_upkeep[id] = Upkeep({
       target: target,
       executeGas: gasLimit,
       balance: 0,
@@ -200,7 +200,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
       lastKeeper: address(0)
     });
     s_checkData[id] = checkData;
-    s_registrationCount++;
+    s_upkeepCount++;
 
     emit UpkeepRegistered(id, gasLimit, admin);
   }
@@ -219,11 +219,11 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
       int256 linkEth
     )
   {
-    Registration storage registration = s_registrations[id];
-    gasLimit = registration.executeGas;
+    Upkeep storage upkeep = s_upkeep[id];
+    gasLimit = upkeep.executeGas;
     (gasWei, linkEth) = getFeedData();
     maxLinkPayment = calculatePaymentAmount(gasLimit, gasWei, linkEth);
-    if (registration.balance < maxLinkPayment) {
+    if (upkeep.balance < maxLinkPayment) {
       return (false, performData, 0, 0, 0, 0);
     }
 
@@ -231,7 +231,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
     (
       bool success,
       bytes memory result
-    ) = registration.target.call{gas: s_config.checkGasLimit}(callData);
+    ) = upkeep.target.call{gas: s_config.checkGasLimit}(callData);
     if (!success) {
       return (false, performData, 0, 0, 0, 0);
     }
@@ -245,22 +245,22 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
   )
     external
     cannotExecute()
-    validRegistration(id)
+    validUpkeep(id)
     returns (
       bool success
     )
   {
-    Registration memory registration = s_registrations[id];
-    uint256 gasLimit = registration.executeGas;
+    Upkeep memory upkeep = s_upkeep[id];
+    uint256 gasLimit = upkeep.executeGas;
     (int256 gasWei, int256 linkEth) = getFeedData();
     uint96 payment = calculatePaymentAmount(gasLimit, gasWei, linkEth);
-    if (registration.balance < payment) {
+    if (upkeep.balance < payment) {
       return false;
     }
 
     bytes memory callData = abi.encodeWithSelector(PERFORM_SELECTOR, performData);
 
-    return callWithExactGas(gasLimit, registration.target, callData);
+    return callWithExactGas(gasLimit, upkeep.target, callData);
   }
 
   function performUpkeep(
@@ -270,27 +270,27 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
     external
     nonReentrant()
     validateKeeper()
-    validRegistration(id)
+    validUpkeep(id)
   {
-    Registration memory registration = s_registrations[id];
-    uint256 gasLimit = registration.executeGas;
+    Upkeep memory upkeep = s_upkeep[id];
+    uint256 gasLimit = upkeep.executeGas;
     (int256 gasWei, int256 linkEth) = getFeedData();
     if (gasWei > int256(tx.gasprice)) {
       gasWei = int256(tx.gasprice);
     }
     uint96 payment = calculatePaymentAmount(gasLimit, gasWei, linkEth);
-    require(registration.balance >= payment, "!executable");
-    require(registration.lastKeeper != msg.sender, "keepers must take turns");
+    require(upkeep.balance >= payment, "!executable");
+    require(upkeep.lastKeeper != msg.sender, "keepers must take turns");
 
     uint256  gasUsed = gasleft();
     bytes memory callData = abi.encodeWithSelector(PERFORM_SELECTOR, performData);
-    bool success = callWithExactGas(gasLimit, registration.target, callData);
+    bool success = callWithExactGas(gasLimit, upkeep.target, callData);
     gasUsed = gasUsed - gasleft();
 
     payment = calculatePaymentAmount(gasUsed, gasWei, linkEth);
-    registration.balance = registration.balance.sub(payment);
-    registration.lastKeeper = msg.sender;
-    s_registrations[id] = registration;
+    upkeep.balance = upkeep.balance.sub(payment);
+    upkeep.lastKeeper = msg.sender;
+    s_upkeep[id] = upkeep;
     uint96 newBalance = s_keeperInfo[msg.sender].balance.add(payment);
     s_keeperInfo[msg.sender].balance = newBalance;
 
@@ -306,16 +306,16 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
   )
     external
   {
-    require(s_registrations[id].maxValidBlocknumber == UINT64_MAX, "cannot cancel upkeep");
+    require(s_upkeep[id].maxValidBlocknumber == UINT64_MAX, "cannot cancel upkeep");
     bool isOwner = msg.sender == owner;
-    require(isOwner|| msg.sender == s_registrations[id].admin, "only owner or admin");
+    require(isOwner|| msg.sender == s_upkeep[id].admin, "only owner or admin");
 
     uint256 height = block.number;
     if (!isOwner) {
       height = height.add(CANCELATION_DELAY);
     }
-    s_registrations[id].maxValidBlocknumber = uint64(height);
-    s_canceledRegistrations.push(id);
+    s_upkeep[id].maxValidBlocknumber = uint64(height);
+    s_canceledUpkeepList.push(id);
 
     emit UpkeepCanceled(id, uint64(height));
   }
@@ -331,9 +331,9 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
     uint96 amount
   )
     external
-    validRegistration(id)
+    validUpkeep(id)
   {
-    s_registrations[id].balance = s_registrations[id].balance.add(amount);
+    s_upkeep[id].balance = s_upkeep[id].balance.add(amount);
     LINK.transferFrom(msg.sender, address(this), amount);
     emit FundsAdded(id, msg.sender, amount);
   }
@@ -354,9 +354,9 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
     require(msg.sender == address(LINK), "only callable through LINK");
     require(data.length == 32, "data must be 32 bytes");
     uint256 id = abi.decode(data, (uint256));
-    validateRegistration(id);
+    validateUpkeep(id);
 
-    s_registrations[id].balance = s_registrations[id].balance.add(uint96(amount));
+    s_upkeep[id].balance = s_upkeep[id].balance.add(uint96(amount));
 
     emit FundsAdded(id, sender, uint96(amount));
   }
@@ -372,11 +372,11 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
   )
     external
   {
-    require(s_registrations[id].admin == msg.sender, "only callable by admin");
-    require(s_registrations[id].maxValidBlocknumber <= block.number, "registration must be canceled");
+    require(s_upkeep[id].admin == msg.sender, "only callable by admin");
+    require(s_upkeep[id].maxValidBlocknumber <= block.number, "upkeep must be canceled");
 
-    uint256 amount = s_registrations[id].balance;
-    s_registrations[id].balance = 0;
+    uint256 amount = s_upkeep[id].balance;
+    s_upkeep[id].balance = 0;
     emit FundsWithdrawn(id, amount, to);
 
     LINK.transfer(to, amount);
@@ -497,8 +497,8 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
     external
     onlyOwner()
   {
-    for (uint256 i = 0; i < s_keepers.length; i++) {
-      address keeper = s_keepers[i];
+    for (uint256 i = 0; i < s_keeperList.length; i++) {
+      address keeper = s_keeperList[i];
       s_keeperInfo[keeper].active = false;
     }
     for (uint256 i = 0; i < keepers.length; i++) {
@@ -510,7 +510,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
       s_keeper.payee = newPayee;
       s_keeper.active = true;
     }
-    s_keepers = keepers;
+    s_keeperList = keepers;
     emit KeepersUpdated(keepers, payees);
   }
 
@@ -528,22 +528,22 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
     returns (
       address target,
       uint32 executeGas,
+      bytes memory checkData,
       uint96 balance,
       address lastKeeper,
       address admin,
-      uint64 maxValidBlocknumber,
-      bytes memory checkData
+      uint64 maxValidBlocknumber
     )
   {
-    Registration memory reg = s_registrations[id];
+    Upkeep memory reg = s_upkeep[id];
     return (
       reg.target,
       reg.executeGas,
+      s_checkData[id],
       reg.balance,
       reg.lastKeeper,
       reg.admin,
-      reg.maxValidBlocknumber,
-      reg.checkData
+      reg.maxValidBlocknumber
     );
   }
 
@@ -557,7 +557,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
       uint256
     )
   {
-    return s_registrationCount;
+    return s_upkeepCount;
   }
 
   function getCanceledUpkeepList()
@@ -567,20 +567,20 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
       uint256[] memory
     )
   {
-    return s_canceledRegistrations;
+    return s_canceledUpkeepList;
   }
 
   /*
    * @notice read the current list of addresses allowed to perform upkeep
    */
-  function getKeepers()
+  function getKeeperList()
     external
     view
     returns (
       address[] memory
     )
   {
-    return s_keepers;
+    return s_keeperList;
   }
 
   /*
@@ -711,27 +711,27 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
   }
 
   /*
-   * @dev ensures a registration is valid
+   * @dev ensures a upkeep is valid
    */
-  function validateRegistration(
+  function validateUpkeep(
     uint256 id
   )
     private
     view
   {
-    require(s_registrations[id].maxValidBlocknumber > block.number, "invalid upkeep id");
+    require(s_upkeep[id].maxValidBlocknumber > block.number, "invalid upkeep id");
   }
 
 
   // MODIFIERS
 
   /*
-   * @dev ensures a registration is valid
+   * @dev ensures a upkeep is valid
    */
-  modifier validRegistration(
+  modifier validUpkeep(
     uint256 id
   ) {
-    validateRegistration(id);
+    validateUpkeep(id);
     _;
   }
 

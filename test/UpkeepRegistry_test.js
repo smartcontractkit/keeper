@@ -87,13 +87,13 @@ contract('UpkeepRegistry', (accounts) => {
       const oldKeepers = [keeper1, keeper2]
       const oldPayees = [payee1, payee2]
       await registry.setKeepers(oldKeepers, oldPayees, {from: owner})
-      assert.deepEqual(oldKeepers, await registry.getKeepers())
+      assert.deepEqual(oldKeepers, await registry.getKeeperList())
 
       // remove keepers
       const newKeepers = [keeper2, keeper3]
       const newPayees = [payee2, payee3]
       const { receipt } = await registry.setKeepers(newKeepers, newPayees, {from: owner})
-      assert.deepEqual(newKeepers, await registry.getKeepers())
+      assert.deepEqual(newKeepers, await registry.getKeeperList())
 
       expectEvent(receipt, 'KeepersUpdated', {
         keepers: newKeepers,
@@ -484,10 +484,10 @@ contract('UpkeepRegistry', (accounts) => {
       )
     })
 
-    it('reverts if called on an uncanceled registration', async () => {
+    it('reverts if called on an uncanceled upkeep', async () => {
       await expectRevert(
         registry.withdrawFunds(id, payee1, { from: admin }),
-        'registration must be canceled'
+        'upkeep must be canceled'
       )
     })
 
