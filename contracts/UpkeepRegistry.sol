@@ -10,12 +10,13 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "./SafeMath96.sol";
 import "./UpkeepBase.sol";
 import "./UpkeepInterface.sol";
+import "./UpkeepRegistryInterface.sol";
 
 /**
   * @notice Registry for adding work for Chainlink Keepers to perform on client
   * contracts. Clients must support the Upkeep interface.
 */
-contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
+contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard, UpkeepRegistryKeeperInterface {
   using Address for address;
   using SafeERC20 for IERC20;
   using SafeMath for uint256;
@@ -209,6 +210,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
     uint256 id
   )
     external
+    override
     cannotExecute()
     returns (
       bool canPerform,
@@ -244,6 +246,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
     bytes calldata performData
   )
     external
+    override
     cannotExecute()
     validUpkeep(id)
     returns (
@@ -268,6 +271,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
     bytes calldata performData
   )
     external
+    override
     nonReentrant()
     validateKeeper()
     validUpkeep(id)
@@ -525,6 +529,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
   )
     external
     view
+    override
     returns (
       address target,
       uint32 executeGas,
@@ -553,6 +558,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
   function getUpkeepCount()
     external
     view
+    override
     returns (
       uint256
     )
@@ -563,6 +569,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
   function getCanceledUpkeepList()
     external
     view
+    override
     returns (
       uint256[] memory
     )
@@ -576,6 +583,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
   function getKeeperList()
     external
     view
+    override
     returns (
       address[] memory
     )
@@ -591,6 +599,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
   )
     external
     view
+    override
     returns (
       address payee,
       bool active,
@@ -607,6 +616,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
   function getConfig()
     external
     view
+    override
     returns (
       uint32 paymentPremiumPPB,
       uint24 checkFrequencyBlocks,
