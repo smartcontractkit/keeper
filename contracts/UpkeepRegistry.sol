@@ -185,13 +185,17 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard, UpkeepRegistryKee
     bytes calldata checkData
   )
     external
+    override
     onlyOwner()
+    returns (
+      uint256 id
+    )
   {
     require(target.isContract(), "target is not a contract");
     require(gasLimit >= CALL_GAS_MIN, "min gas is 2300");
     require(gasLimit <= CALL_GAS_MAX, "max gas is 2500000");
 
-    uint256 id = s_upkeepCount;
+    id = s_upkeepCount;
     s_upkeep[id] = Upkeep({
       target: target,
       executeGas: gasLimit,
@@ -204,6 +208,8 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard, UpkeepRegistryKee
     s_upkeepCount++;
 
     emit UpkeepRegistered(id, gasLimit, admin);
+
+    return id;
   }
 
   function checkForUpkeep(
@@ -309,6 +315,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard, UpkeepRegistryKee
     uint256 id
   )
     external
+    override
   {
     require(s_upkeep[id].maxValidBlocknumber == UINT64_MAX, "cannot cancel upkeep");
     bool isOwner = msg.sender == owner;
@@ -335,6 +342,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard, UpkeepRegistryKee
     uint96 amount
   )
     external
+    override
     validUpkeep(id)
   {
     s_upkeep[id].balance = s_upkeep[id].balance.add(amount);

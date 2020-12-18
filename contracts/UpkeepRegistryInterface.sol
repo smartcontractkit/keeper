@@ -1,6 +1,26 @@
 pragma solidity 0.6.12;
 
-interface UpkeepRegistryGettersInterface {
+interface UpkeepRegistryBaseInterface {
+  function registerUpkeep(
+    address target,
+    uint32 gasLimit,
+    address admin,
+    bytes calldata checkData
+  ) external returns (
+      uint256 id
+    );
+  function performUpkeep(
+    uint256 id,
+    bytes calldata performData
+  ) external;
+  function cancelUpkeep(
+    uint256 id
+  ) external;
+  function addFunds(
+    uint256 id,
+    uint96 amount
+  ) external;
+
   function getUpkeep(uint256 id)
     external view returns (
       address target,
@@ -39,7 +59,7 @@ interface UpkeepRegistryGettersInterface {
   * but we want them to be easily queried off-chain. Solidity will not compile
   * if we actually inherrit from this interface, so we document it here.
 */
-interface UpkeepRegistryInterface is UpkeepRegistryGettersInterface {
+interface UpkeepRegistryInterface is UpkeepRegistryBaseInterface {
   function checkForUpkeep(uint256 upkeepId)
     external view returns ( bool canPerform,
       bytes memory performData,
@@ -51,11 +71,9 @@ interface UpkeepRegistryInterface is UpkeepRegistryGettersInterface {
 
   function tryUpkeep(uint256 id, bytes calldata performData)
     external view returns (bool success);
-
-  function performUpkeep(uint256 id, bytes calldata performData) external;
 }
 
-interface UpkeepRegistryKeeperInterface is UpkeepRegistryGettersInterface {
+interface UpkeepRegistryKeeperInterface is UpkeepRegistryBaseInterface {
   function checkForUpkeep(uint256 upkeepId)
     external returns ( bool canPerform,
       bytes memory performData,
@@ -67,6 +85,4 @@ interface UpkeepRegistryKeeperInterface is UpkeepRegistryGettersInterface {
 
   function tryUpkeep(uint256 id, bytes calldata performData)
     external returns (bool success);
-
-  function performUpkeep(uint256 id, bytes calldata performData) external;
 }
