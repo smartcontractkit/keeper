@@ -1,9 +1,9 @@
-pragma solidity 0.6.12;
+pragma solidity 0.7.6;
 
 import "@chainlink/contracts/src/v0.6/interfaces/AggregatorV3Interface.sol";
-import "@chainlink/contracts/src/v0.6/interfaces/LinkTokenInterface.sol";
-import "@chainlink/contracts/src/v0.6/Owned.sol";
-import "@chainlink/contracts/src/v0.6/vendor/SafeMathChainlink.sol";
+import "@chainlink/contracts/src/v0.7/interfaces/LinkTokenInterface.sol";
+import "@chainlink/contracts/src/v0.7/vendor/SafeMathChainlink.sol";
+import "./vendor/Owned.sol";
 import "./vendor/Address.sol";
 import "./vendor/ReentrancyGuard.sol";
 import "./SafeMath96.sol";
