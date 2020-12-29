@@ -1,12 +1,11 @@
 pragma solidity 0.6.12;
 
 import "@chainlink/contracts/src/v0.6/interfaces/AggregatorV3Interface.sol";
+import "@chainlink/contracts/src/v0.6/interfaces/LinkTokenInterface.sol";
 import "@chainlink/contracts/src/v0.6/Owned.sol";
-import "@openzeppelin/contracts/math/SafeMath.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
-import "@openzeppelin/contracts/utils/Address.sol";
-import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import "@chainlink/contracts/src/v0.6/vendor/SafeMathChainlink.sol";
+import "./vendor/Address.sol";
+import "./vendor/ReentrancyGuard.sol";
 import "./SafeMath96.sol";
 import "./UpkeepBase.sol";
 import "./UpkeepInterface.sol";
@@ -18,8 +17,7 @@ import "./UpkeepRegistryInterface.sol";
 */
 contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard, UpkeepRegistryKeeperInterface {
   using Address for address;
-  using SafeERC20 for IERC20;
-  using SafeMath for uint256;
+  using SafeMathChainlink for uint256;
   using SafeMath96 for uint96;
 
   address constant private ZERO_ADDRESS = address(0);
@@ -46,7 +44,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard, UpkeepRegistryKee
   int256 private s_fallbackGasPrice;  // not in config object for gas savings
   int256 private s_fallbackLinkPrice; // not in config object for gas savings
 
-  IERC20 public immutable LINK;
+  LinkTokenInterface public immutable LINK;
   AggregatorV3Interface public immutable LINK_ETH_FEED;
   AggregatorV3Interface public immutable FAST_GAS_FEED;
 
@@ -153,7 +151,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard, UpkeepRegistryKee
   )
     public
   {
-    LINK = IERC20(link);
+    LINK = LinkTokenInterface(link);
     LINK_ETH_FEED = AggregatorV3Interface(linkEthFeed);
     FAST_GAS_FEED = AggregatorV3Interface(fastGasFeed);
 
