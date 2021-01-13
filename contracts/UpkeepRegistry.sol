@@ -383,6 +383,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard, UpkeepRegistryKee
     address to
   )
     external
+    validateRecipient(to)
   {
     require(s_upkeep[id].admin == msg.sender, "only callable by admin");
     require(s_upkeep[id].maxValidBlocknumber <= block.number, "upkeep must be canceled");
@@ -404,6 +405,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard, UpkeepRegistryKee
     address to
   )
     external
+    validateRecipient(to)
   {
     KeeperInfo memory keeper = s_keeperInfo[from];
     require(keeper.payee == msg.sender, "only callable by payee");
@@ -759,6 +761,16 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard, UpkeepRegistryKee
   modifier validateKeeper()
   {
     require(s_keeperInfo[msg.sender].active, "only active keepers");
+    _;
+  }
+
+  /*
+   * @dev ensures that burns don't accidentally happen by sending to the zero
+   * address
+   */
+  modifier validateRecipient(address to)
+  {
+    require(to != address(0), "cannot send to zero address");
     _;
   }
 

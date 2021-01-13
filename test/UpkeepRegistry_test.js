@@ -491,6 +491,13 @@ contract('UpkeepRegistry', (accounts) => {
       )
     })
 
+    it('reverts if called with the 0 address', async () => {
+      await expectRevert(
+        registry.withdrawFunds(id, zeroAddress, { from: admin }),
+        'cannot send to zero address'
+      )
+    })
+
     describe("after the registration is cancelled", () => {
       beforeEach(async () => {
         await registry.cancelUpkeep(id, { from: owner })
@@ -657,6 +664,13 @@ contract('UpkeepRegistry', (accounts) => {
       await expectRevert(
         registry.withdrawPayment(keeper1, nonkeeper, { from: payee2 }),
         "only callable by payee"
+      )
+    })
+
+    it('reverts if called with the 0 address', async () => {
+      await expectRevert(
+        registry.withdrawPayment(keeper1, zeroAddress, { from: payee2 }),
+        'cannot send to zero address'
       )
     })
 
