@@ -568,13 +568,27 @@ contract('UpkeepRegistry', (accounts) => {
         )
       })
 
-      it('reverts if called multiple times', async () => {
+      it('does not revert if reverts if called multiple times', async () => {
         await registry.cancelUpkeep(id, { from: owner })
+        await registry.cancelUpkeep(id, { from: owner })
+      })
 
-        await expectRevert(
-          registry.cancelUpkeep(id, { from: owner }),
-          'cannot cancel upkeep'
-        )
+      describe("when called by the owner when the admin has just canceled", () => {
+        let oldExpiration
+
+        beforeEach(async () => {
+          await registry.cancelUpkeep(id, { from: admin })
+          const registration = await registry.getUpkeep(id)
+          oldExpiration = registration.maxValidBlocknumber
+        })
+
+        it('allows the owner to cancel it more quickly', async () => {
+          await registry.cancelUpkeep(id, { from: owner })
+
+          const registration = await registry.getUpkeep(id)
+          const newExpiration = registration.maxValidBlocknumber
+          assert.isTrue(newExpiration.lt(oldExpiration))
+        })
       })
     })
 

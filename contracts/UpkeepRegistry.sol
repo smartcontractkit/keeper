@@ -315,8 +315,10 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard, UpkeepRegistryKee
     external
     override
   {
-    require(s_upkeep[id].maxValidBlocknumber == UINT64_MAX, "cannot cancel upkeep");
+    uint64 maxValid = s_upkeep[id].maxValidBlocknumber;
+    bool notCanceled = maxValid == UINT64_MAX;
     bool isOwner = msg.sender == owner;
+    require(notCanceled || isOwner && maxValid > 0, "cannot cancel upkeep");
     require(isOwner|| msg.sender == s_upkeep[id].admin, "only owner or admin");
 
     uint256 height = block.number;
