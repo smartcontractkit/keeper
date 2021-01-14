@@ -27,9 +27,8 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard, UpkeepRegistryKee
   uint256 constant private CALL_GAS_MIN = 2_300;
   uint256 constant private CANCELATION_DELAY = 50;
   uint256 constant private CUSHION = 3_000;
-  uint256 constant private LINK_DIVISIBILITY = 1e18;
   uint256 constant private REGISTRY_GAS_OVERHEAD = 80_000;
-  uint32 constant private PPB_BASE = 1_000_000_000;
+  uint256 constant private PPB_BASE = 1_000_000_000;
   uint64 constant private UINT64_MAX = 2**64 - 1;
   uint96 constant private LINK_TOTAL_SUPPLY = 1e27;
 
@@ -715,9 +714,8 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard, UpkeepRegistryKee
     )
   {
     uint256 weiForGas = uint256(gasWei).mul(gasLimit.add(REGISTRY_GAS_OVERHEAD));
-    uint256 linkForGas = weiForGas.mul(LINK_DIVISIBILITY).div(uint256(linkEth));
-    uint256 premium = linkForGas.mul(s_config.paymentPremiumPPB).div(PPB_BASE);
-    uint256 total = linkForGas.add(premium);
+    uint256 premium = PPB_BASE.add(s_config.paymentPremiumPPB);
+    uint256 total = weiForGas.mul(1e9).mul(premium).div(uint256(linkEth));
     require(total <= LINK_TOTAL_SUPPLY, "payment greater than all LINK");
     return uint96(total); // LINK_TOTAL_SUPPLY < UINT96_MAX
   }
