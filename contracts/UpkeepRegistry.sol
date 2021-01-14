@@ -244,31 +244,6 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard, UpkeepRegistryKee
     return (canPerform, performData, maxLinkPayment, gasLimit, gasWei, linkEth);
   }
 
-  function tryUpkeep(
-    uint256 id,
-    bytes calldata performData
-  )
-    external
-    override
-    cannotExecute()
-    validUpkeep(id)
-    returns (
-      bool success
-    )
-  {
-    Upkeep memory upkeep = s_upkeep[id];
-    uint256 gasLimit = upkeep.executeGas;
-    (int256 gasWei, int256 linkEth) = getFeedData();
-    uint96 payment = calculatePaymentAmount(gasLimit, gasWei, linkEth);
-    if (upkeep.balance < payment) {
-      return false;
-    }
-
-    bytes memory callData = abi.encodeWithSelector(PERFORM_SELECTOR, performData);
-
-    return callWithExactGas(gasLimit, upkeep.target, callData);
-  }
-
   function performUpkeep(
     uint256 id,
     bytes calldata performData
@@ -278,6 +253,9 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard, UpkeepRegistryKee
     nonReentrant()
     validateKeeper()
     validUpkeep(id)
+    returns (
+      bool success
+    )
   {
     Upkeep memory upkeep = s_upkeep[id];
     uint256 gasLimit = upkeep.executeGas;
@@ -291,7 +269,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard, UpkeepRegistryKee
 
     uint256  gasUsed = gasleft();
     bytes memory callData = abi.encodeWithSelector(PERFORM_SELECTOR, performData);
-    bool success = callWithExactGas(gasLimit, upkeep.target, callData);
+    success = callWithExactGas(gasLimit, upkeep.target, callData);
     gasUsed = gasUsed - gasleft();
 
     payment = calculatePaymentAmount(gasUsed, gasWei, linkEth);
@@ -302,6 +280,8 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard, UpkeepRegistryKee
     s_keeperInfo[msg.sender].balance = newBalance;
 
     emit UpkeepPerformed(id, success, payment, performData);
+
+    return success;
   }
 
   /*

@@ -12,7 +12,9 @@ interface UpkeepRegistryBaseInterface {
   function performUpkeep(
     uint256 id,
     bytes calldata performData
-  ) external;
+  ) external returns (
+      bool success
+    );
   function cancelUpkeep(
     uint256 id
   ) external;
@@ -68,9 +70,6 @@ interface UpkeepRegistryInterface is UpkeepRegistryBaseInterface {
       int256 gasWei,
       int256 linkEth
     );
-
-  function tryUpkeep(uint256 id, bytes calldata performData)
-    external view returns (bool success);
 }
 
 interface UpkeepRegistryKeeperInterface is UpkeepRegistryBaseInterface {
@@ -82,7 +81,4 @@ interface UpkeepRegistryKeeperInterface is UpkeepRegistryBaseInterface {
       int256 gasWei,
       int256 linkEth
     );
-
-  function tryUpkeep(uint256 id, bytes calldata performData)
-    external returns (bool success);
 }
