@@ -884,4 +884,62 @@ contract('UpkeepRegistry', (accounts) => {
       assert.isTrue(before.add(amount).eq(after))
     })
   })
+
+  describe('#recoverFunds', () => {
+    const sent = ether('7')
+
+    beforeEach(async () => {
+      await linkToken.approve(registry.address, ether('100'), { from: keeper1 })
+
+      // add funds to upkeep 1 and perform and withdraw some payment
+      let { receipt } = await registry.registerUpkeep(
+        mock.address,
+        executeGas,
+        admin,
+        emptyBytes,
+        { from: owner }
+      )
+      const id1 = receipt.logs[0].args.id
+      await registry.addFunds(id1, ether('5'), { from: keeper1 })
+      await registry.performUpkeep(id1, "0x", { from: keeper1 })
+      await registry.performUpkeep(id1, "0x", { from: keeper2 })
+      await registry.performUpkeep(id1, "0x", { from: keeper3 })
+      await registry.withdrawPayment(keeper1, nonkeeper, { from: payee1 })
+
+      // transfer funds directly to the registry
+      await linkToken.transfer(registry.address, sent, { from: keeper1 })
+
+      // add funds to upkeep 2 and perform and withdraw some payment
+      const tx2 = await registry.registerUpkeep(
+        mock.address,
+        executeGas,
+        admin,
+        emptyBytes,
+        { from: owner }
+      )
+      const id2 = tx2.receipt.logs[0].args.id
+      await registry.addFunds(id2, ether('5'), { from: keeper1 })
+      await registry.performUpkeep(id2, "0x", { from: keeper1 })
+      await registry.performUpkeep(id2, "0x", { from: keeper2 })
+      await registry.performUpkeep(id2, "0x", { from: keeper3 })
+      await registry.withdrawPayment(keeper2, nonkeeper, { from: payee2 })
+    })
+
+    it('reverts if not called by owner', async () => {
+      await expectRevert(
+        registry.recoverFunds({from: keeper1}),
+        "Only callable by owner"
+      )
+    })
+
+    it('allows any funds that have been accidentally transfered to be moved', async () => {
+      const balanceBefore = await linkToken.balanceOf(registry.address)
+
+      await linkToken.balanceOf(registry.address)
+
+      const tx = await registry.recoverFunds({from: owner})
+      const balanceAfter = await linkToken.balanceOf(registry.address)
+      assert.isTrue(balanceBefore.eq(balanceAfter.add(sent)))
+    })
+  })
 })

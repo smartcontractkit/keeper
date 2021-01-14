@@ -396,6 +396,28 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard, UpkeepRegistryKee
   }
 
   /*
+   * @notice recovers LINK funds improperly transfered to the registry
+   */
+  function recoverFunds()
+    external
+    onlyOwner()
+  {
+    uint96 locked = 0;
+    uint256 max = s_upkeepCount;
+    for (uint256 i = 0; i < max; i++) {
+      locked = s_upkeep[i].balance.add(locked);
+    }
+    max = s_keeperList.length;
+    for (uint256 i = 0; i < max; i++) {
+      address addr = s_keeperList[i];
+      locked = s_keeperInfo[addr].balance.add(locked);
+    }
+
+    uint256 total = LINK.balanceOf(address(this));
+    LINK.transfer(msg.sender, total.sub(locked));
+  }
+
+  /*
    * @notice withdraws a keeper's payment, callable only by the keeper's payee
    * @param from keeper address
    * @param to address to send the payment to
