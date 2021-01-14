@@ -128,7 +128,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard, UpkeepRegistryKee
    * @param linkEthFeed address of the LINK/ETH price feed
    * @param fastGasFeed address of the Fast Gas price feed
    * @param paymentPremiumPPB payment premium rate oracles receive on top of
-   * being reimbursed for gas, measured in parts per thousand
+   * being reimbursed for gas, measured in parts per billion
    * @param checkFrequencyBlocks number of blocks an oracle should wait before
    * checking for upkeep
    * @param checkGasLimit gas limit when checking for upkeep
@@ -460,7 +460,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard, UpkeepRegistryKee
   /*
    * @notice updates the configuration of the registry
    * @param paymentPremiumPPB payment premium rate oracles receive on top of
-   * being reimbursed for gas, measured in parts per thousand
+   * being reimbursed for gas, measured in parts per billion
    * @param checkFrequencyBlocks number of blocks an oracle should wait before
    * checking for upkeep
    * @param checkGasLimit gas limit when checking for upkeep
@@ -652,10 +652,10 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard, UpkeepRegistryKee
   // PRIVATE
 
   /*
-   * @dev retrieves feed data for fast gas/eth and link/eth prices. if the feed data
-   * is stale it uses the configured fallback price. once a price is picked for
-   * gas it takes the min of gas price in the transaction or the fast gas price
-   * in order to reduce costs for the upkeep clients.
+   * @dev retrieves feed data for fast gas/eth and link/eth prices. if the feed
+   * data is stale it uses the configured fallback price. Once a price is picked
+   * for gas it takes the min of gas price in the transaction or the fast gas
+   * price in order to reduce costs for the upkeep clients.
    */
   function getFeedData()
     private
@@ -702,7 +702,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard, UpkeepRegistryKee
 
   /*
    * @dev calls target address with exactly gasAmount gas and data as calldata
-   * or reverts
+   * or reverts if at least gasAmount gas is not available
    */
   function callWithExactGas(
     uint256 gasAmount,
