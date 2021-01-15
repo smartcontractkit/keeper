@@ -229,7 +229,7 @@ contract('UpkeepRegistry', (accounts) => {
 
   describe('#checkForUpkeep', () => {
     it('returns false if the upkeep is not funded', async () => {
-      const check = await registry.checkForUpkeep.call(id, {from: zeroAddress})
+      const check = await registry.checkForUpkeep.call(id, keeper1, {from: zeroAddress})
       assert.isFalse(check.canPerform)
     })
 
@@ -243,29 +243,52 @@ contract('UpkeepRegistry', (accounts) => {
         await mock.setCanPerform(true)
         await mock.setCanCheck(true)
         await expectRevert(
-          registry.checkForUpkeep(id),
+          registry.checkForUpkeep(id, keeper1),
           'only for simulated backend'
         )
       })
 
-      it('returns false if the target cannot execute', async () => {
-        const mockResponse = await mock.checkForUpkeep.call("0x", { from: zeroAddress })
-        assert.isFalse(mockResponse.callable)
-        const check = await registry.checkForUpkeep.call(id, { from: zeroAddress })
-        assert.isFalse(check.canPerform)
+      it('reverts if the specified keeper is not valid', async () => {
+        await mock.setCanPerform(true)
+        await mock.setCanCheck(true)
+        await expectRevert(
+          registry.checkForUpkeep(id, owner),
+          'only for simulated backend'
+        )
       })
 
-      it('returns true with pricing info if the target can execute', async () => {
-        await mock.setCanCheck(true)
-        const mockResponse = await mock.checkForUpkeep.call("0x", { from: zeroAddress })
-        assert.isTrue(mockResponse.callable)
-        const check = await registry.checkForUpkeep.call(id, {from: zeroAddress})
+      context('and performing the upkeep simulation succeeds', () => {
+        beforeEach(async () => {
+          await mock.setCanCheck(true)
+          await mock.setCanPerform(true)
+        })
 
-        assert.isTrue(check.canPerform)
-        assert.isTrue(check.gasLimit.eq(executeGas))
-        assert.isTrue(check.linkEth.eq(linkEth))
-        assert.isTrue(check.gasWei.eq(gasWei))
-        assert.isTrue(check.maxLinkPayment.eq(linkForGas(executeGas)))
+        it('returns true with pricing info if the target can execute', async () => {
+          const check = await registry.checkForUpkeep.call(id, keeper1, {from: zeroAddress})
+
+          assert.isTrue(check.canPerform)
+          assert.isTrue(check.gasLimit.eq(executeGas))
+          assert.isTrue(check.linkEth.eq(linkEth))
+          assert.isTrue(check.gasWei.eq(gasWei))
+          assert.isTrue(check.maxLinkPayment.eq(linkForGas(executeGas)))
+        })
+      })
+
+      context('and performing the upkeep simulation fails', () => {
+        beforeEach(async () => {
+          await mock.setCanCheck(true)
+          await mock.setCanPerform(false)
+        })
+
+        it('returns false without pricing info', async () => {
+          const check = await registry.checkForUpkeep.call(id, keeper1, {from: zeroAddress})
+
+          assert.isFalse(check.canPerform)
+          assert.isFalse(check.gasLimit.eq(0))
+          assert.isFalse(check.linkEth.eq(0))
+          assert.isFalse(check.gasWei.eq(0))
+          assert.isFalse(check.maxLinkPayment.eq(0))
+        })
       })
     })
   })
@@ -354,8 +377,8 @@ contract('UpkeepRegistry', (accounts) => {
         const difference = after.sub(before)
         assert.isTrue(max.gt(totalTx))
         assert.isTrue(totalTx.gt(difference))
-        assert.isTrue(linkForGas(3100).lt(difference)) // exact number is flaky
-        assert.isTrue(linkForGas(3200).gt(difference)) // instead test a range
+        assert.isTrue(linkForGas(3200).lt(difference)) // exact number is flaky
+        assert.isTrue(linkForGas(3300).gt(difference)) // instead test a range
       })
 
       it('pays the caller even if the target function fails', async () => {

@@ -62,8 +62,14 @@ interface UpkeepRegistryBaseInterface {
   * if we actually inherrit from this interface, so we document it here.
 */
 interface UpkeepRegistryInterface is UpkeepRegistryBaseInterface {
-  function checkForUpkeep(uint256 upkeepId)
-    external view returns ( bool canPerform,
+  function checkForUpkeep(
+    uint256 upkeepId,
+    address from
+  )
+    external
+    view
+    returns (
+      bool canPerform,
       bytes memory performData,
       uint256 maxLinkPayment,
       uint256 gasLimit,
@@ -73,8 +79,13 @@ interface UpkeepRegistryInterface is UpkeepRegistryBaseInterface {
 }
 
 interface UpkeepRegistryKeeperInterface is UpkeepRegistryBaseInterface {
-  function checkForUpkeep(uint256 upkeepId)
-    external returns ( bool canPerform,
+  function checkForUpkeep(
+    uint256 upkeepId,
+    address from
+  )
+    external
+    returns (
+      bool canPerform,
       bytes memory performData,
       uint256 maxLinkPayment,
       uint256 gasLimit,

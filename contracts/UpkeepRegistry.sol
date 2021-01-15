@@ -69,6 +69,12 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard, UpkeepRegistryKee
     uint24 stalenessSeconds;
   }
 
+  struct PerformParams {
+    address from;
+    uint256 id;
+    bytes performData;
+  }
+
   event UpkeepRegistered(
     uint256 indexed id,
     uint32 executeGas,
@@ -210,7 +216,8 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard, UpkeepRegistryKee
   }
 
   function checkForUpkeep(
-    uint256 id
+    uint256 id,
+    address from
   )
     external
     override
@@ -237,11 +244,16 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard, UpkeepRegistryKee
       bool success,
       bytes memory result
     ) = upkeep.target.call{gas: s_config.checkGasLimit}(callData);
-    if (!success) {
+    (canPerform, performData) = abi.decode(result, (bool, bytes));
+    if (!success || !canPerform) {
       return (false, performData, 0, 0, 0, 0);
     }
-    (canPerform, performData) = abi.decode(result, (bool, bytes));
-    return (canPerform, performData, maxLinkPayment, gasLimit, gasWei, linkEth);
+    success = performUpkeepWithParams(PerformParams({
+      from: from,
+      id: id,
+      performData: performData
+    }));
+    return (success, performData, maxLinkPayment, gasLimit, gasWei, linkEth);
   }
 
   function performUpkeep(
@@ -250,38 +262,15 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard, UpkeepRegistryKee
   )
     external
     override
-    nonReentrant()
-    validateKeeper()
-    validUpkeep(id)
     returns (
       bool success
     )
   {
-    Upkeep memory upkeep = s_upkeep[id];
-    uint256 gasLimit = upkeep.executeGas;
-    (int256 gasWei, int256 linkEth) = getFeedData();
-    if (gasWei > int256(tx.gasprice)) {
-      gasWei = int256(tx.gasprice);
-    }
-    uint96 payment = calculatePaymentAmount(gasLimit, gasWei, linkEth);
-    require(upkeep.balance >= payment, "insufficient payment");
-    require(upkeep.lastKeeper != msg.sender, "keepers must take turns");
-
-    uint256  gasUsed = gasleft();
-    bytes memory callData = abi.encodeWithSelector(PERFORM_SELECTOR, performData);
-    success = callWithExactGas(gasLimit, upkeep.target, callData);
-    gasUsed = gasUsed - gasleft();
-
-    payment = calculatePaymentAmount(gasUsed, gasWei, linkEth);
-    upkeep.balance = upkeep.balance.sub(payment);
-    upkeep.lastKeeper = msg.sender;
-    s_upkeep[id] = upkeep;
-    uint96 newBalance = s_keeperInfo[msg.sender].balance.add(payment);
-    s_keeperInfo[msg.sender].balance = newBalance;
-
-    emit UpkeepPerformed(id, success, payment, performData);
-
-    return success;
+    return performUpkeepWithParams(PerformParams({
+      from: msg.sender,
+      id: id,
+      performData: performData
+    }));
   }
 
   /*
@@ -731,6 +720,47 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard, UpkeepRegistryKee
   }
 
   /*
+   * @dev calls the Upkeep target with the performData param passed in by the
+   * keeper and the exact gas required by the Upkeep
+   */
+  function performUpkeepWithParams(
+    PerformParams memory params
+  )
+    private
+    nonReentrant()
+    returns (
+      bool success
+    )
+  {
+    validateUpkeep(params.id);
+    require(s_keeperInfo[params.from].active, "only active keepers");
+    Upkeep memory upkeep = s_upkeep[params.id];
+    uint256 gasLimit = upkeep.executeGas;
+    (int256 gasWei, int256 linkEth) = getFeedData();
+    if (gasWei > int256(tx.gasprice)) {
+      gasWei = int256(tx.gasprice);
+    }
+    uint96 payment = calculatePaymentAmount(gasLimit, gasWei, linkEth);
+    require(upkeep.balance >= payment, "insufficient payment");
+    require(upkeep.lastKeeper != params.from, "keepers must take turns");
+
+    uint256  gasUsed = gasleft();
+    bytes memory callData = abi.encodeWithSelector(PERFORM_SELECTOR, params.performData);
+    success = callWithExactGas(gasLimit, upkeep.target, callData);
+    gasUsed = gasUsed - gasleft();
+
+    payment = calculatePaymentAmount(gasUsed, gasWei, linkEth);
+    upkeep.balance = upkeep.balance.sub(payment);
+    upkeep.lastKeeper = params.from;
+    s_upkeep[params.id] = upkeep;
+    uint96 newBalance = s_keeperInfo[params.from].balance.add(payment);
+    s_keeperInfo[params.from].balance = newBalance;
+
+    emit UpkeepPerformed(params.id, success, payment, params.performData);
+    return success;
+  }
+
+  /*
    * @dev ensures a upkeep is valid
    */
   function validateUpkeep(
@@ -756,20 +786,12 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard, UpkeepRegistryKee
   }
 
   /*
-   * @dev ensures a keeper is permissioned to peform upkeep
-   */
-  modifier validateKeeper()
-  {
-    require(s_keeperInfo[msg.sender].active, "only active keepers");
-    _;
-  }
-
-  /*
    * @dev ensures that burns don't accidentally happen by sending to the zero
    * address
    */
-  modifier validateRecipient(address to)
-  {
+  modifier validateRecipient(
+    address to
+  ) {
     require(to != address(0), "cannot send to zero address");
     _;
   }
