@@ -25,6 +25,7 @@ contract('UpkeepRegistry', (accounts) => {
   const paymentPremiumPPB =  new BN('250000000')
   const checkFrequencyBlocks = new BN(3)
   const emptyBytes = '0x00'
+  const staticBytes = '0xcaf3bab3'
   const zeroAddress = constants.ZERO_ADDRESS
   const extraGas = new BN('250000')
   const registryGasOverhead = new BN('80000')
@@ -70,6 +71,7 @@ contract('UpkeepRegistry', (accounts) => {
       executeGas,
       admin,
       emptyBytes,
+      staticBytes,
       { from: owner }
     )
     id = receipt.logs[0].args.id
@@ -127,6 +129,7 @@ contract('UpkeepRegistry', (accounts) => {
           executeGas,
           admin,
           emptyBytes,
+          staticBytes,
           { from: owner }
         ),
         'target is not a contract'
@@ -141,6 +144,7 @@ contract('UpkeepRegistry', (accounts) => {
           executeGas,
           admin,
           emptyBytes,
+          staticBytes,
           { from: keeper1 }
         ),
         'Only callable by owner'
@@ -154,6 +158,7 @@ contract('UpkeepRegistry', (accounts) => {
           2299,
           admin,
           emptyBytes,
+          staticBytes,
           { from: owner }
         ),
         'min gas is 2300'
@@ -169,6 +174,7 @@ contract('UpkeepRegistry', (accounts) => {
           2500001,
           admin,
           emptyBytes,
+          staticBytes,
           { from: owner }
         ),
         'max gas is 2500000'
@@ -181,6 +187,7 @@ contract('UpkeepRegistry', (accounts) => {
         executeGas,
         admin,
         emptyBytes,
+        staticBytes,
         { from: owner }
       )
       id = receipt.logs[0].args.id
@@ -336,15 +343,20 @@ contract('UpkeepRegistry', (accounts) => {
         )
       })
 
-      it('executes the data passed to the registry', async () => {
+      it('executes the static data and dynamic data passed as a parameter', async () => {
         await mock.setCanPerform(true)
 
         const performData = "0xc0ffeec0ffee"
         const tx = await registry.performUpkeep(id, performData, { from: keeper1, gas: extraGas })
-        expectEvent(tx.receipt, 'UpkeepPerformed', {
-          success: true,
-          performData: performData
-        })
+        const log = tx.receipt.rawLogs[0]
+        const expected = "0x" +
+          "0000000000000000000000000000000000000000000000000000000000000040" +
+          "0000000000000000000000000000000000000000000000000000000000000080" +
+          "0000000000000000000000000000000000000000000000000000000000000004" +
+          "caf3bab300000000000000000000000000000000000000000000000000000000" +
+          "0000000000000000000000000000000000000000000000000000000000000006" +
+          "c0ffeec0ffee0000000000000000000000000000000000000000000000000000"
+        assert.equal(expected, log.data)
       })
 
       it('updates payment balances', async () => {
@@ -377,8 +389,8 @@ contract('UpkeepRegistry', (accounts) => {
         const difference = after.sub(before)
         assert.isTrue(max.gt(totalTx))
         assert.isTrue(totalTx.gt(difference))
-        assert.isTrue(linkForGas(3200).lt(difference)) // exact number is flaky
-        assert.isTrue(linkForGas(3300).gt(difference)) // instead test a range
+        assert.isTrue(linkForGas(5200).lt(difference)) // exact number is flaky
+        assert.isTrue(linkForGas(5300).gt(difference)) // instead test a range
       })
 
       it('pays the caller even if the target function fails', async () => {
@@ -387,6 +399,7 @@ contract('UpkeepRegistry', (accounts) => {
           executeGas,
           admin,
           emptyBytes,
+          staticBytes,
           { from: owner }
         )
         const id = receipt.logs[0].args.id
@@ -895,6 +908,7 @@ contract('UpkeepRegistry', (accounts) => {
         executeGas,
         admin,
         emptyBytes,
+        staticBytes,
         { from: owner }
       )
       const id1 = receipt.logs[0].args.id
@@ -913,6 +927,7 @@ contract('UpkeepRegistry', (accounts) => {
         executeGas,
         admin,
         emptyBytes,
+        staticBytes,
         { from: owner }
       )
       const id2 = tx2.receipt.logs[0].args.id

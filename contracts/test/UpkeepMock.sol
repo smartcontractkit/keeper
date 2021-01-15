@@ -6,7 +6,7 @@ contract UpkeepMock is UpkeepCompatible {
   bool public canCheck;
   bool public canPerform;
 
-  event UpkeepPerformedWith(bytes upkeepData);
+  event UpkeepPerformedWith(bytes staticData, bytes dynamicData);
 
   function setCanCheck(bool value)
     public
@@ -37,7 +37,8 @@ contract UpkeepMock is UpkeepCompatible {
   }
 
   function performUpkeep(
-    bytes calldata data
+    bytes calldata staticData,
+    bytes calldata dynamicData
   )
     external
     override
@@ -46,7 +47,7 @@ contract UpkeepMock is UpkeepCompatible {
 
     setCanPerform(false);
 
-    emit UpkeepPerformedWith(data);
+    emit UpkeepPerformedWith(staticData, dynamicData);
   }
 
 }
