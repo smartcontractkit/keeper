@@ -18,7 +18,6 @@ contract UpkeepReverter is UpkeepCompatible {
   }
 
   function performUpkeep(
-    bytes calldata,
     bytes calldata
   )
     external

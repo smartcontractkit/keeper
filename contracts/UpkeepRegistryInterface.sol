@@ -5,8 +5,7 @@ interface UpkeepRegistryBaseInterface {
     address target,
     uint32 gasLimit,
     address admin,
-    bytes calldata checkData,
-    bytes calldata performData
+    bytes calldata checkData
   ) external returns (
       uint256 id
     );

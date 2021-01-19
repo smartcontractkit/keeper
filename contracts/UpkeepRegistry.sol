@@ -39,7 +39,6 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard, UpkeepRegistryKee
   mapping(address => KeeperInfo) private s_keeperInfo;
   mapping(address => address) private s_proposedPayee;
   mapping(uint256 => bytes) private s_checkData;
-  mapping(uint256 => bytes) private s_performData;
   Config private s_config;
   int256 private s_fallbackGasPrice;  // not in config object for gas savings
   int256 private s_fallbackLinkPrice; // not in config object for gas savings
@@ -176,7 +175,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard, UpkeepRegistryKee
 
   /*
    * @notice adds a new upkeep
-   * @param target address to perform upkeep on
+   * @param target address to peform upkeep on
    * @param gasLimit amount of gas to provide the target contract when
    * performing upkeep
    * @param admin address to cancel upkeep and withdraw remaining funds
@@ -186,8 +185,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard, UpkeepRegistryKee
     address target,
     uint32 gasLimit,
     address admin,
-    bytes calldata checkData,
-    bytes calldata performData
+    bytes calldata checkData
   )
     external
     override
@@ -210,7 +208,6 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard, UpkeepRegistryKee
       lastKeeper: address(0)
     });
     s_checkData[id] = checkData;
-    s_performData[id] = performData;
     s_upkeepCount++;
 
     emit UpkeepRegistered(id, gasLimit, admin);
@@ -492,7 +489,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard, UpkeepRegistryKee
   }
 
   /*
-   * @notice update the list of keepers allowed to perform upkeep
+   * @notice update the list of keepers allowed to peform upkeep
    * @param keepers list of addresses allowed to perform upkeep
    * @param payees addreses corresponding to keepers who are allowed to
    * move payments which have been acrued
@@ -748,11 +745,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard, UpkeepRegistryKee
     require(upkeep.lastKeeper != params.from, "keepers must take turns");
 
     uint256  gasUsed = gasleft();
-    bytes memory callData = abi.encodeWithSelector(
-      PERFORM_SELECTOR,
-      s_performData[params.id],
-      params.performData
-    );
+    bytes memory callData = abi.encodeWithSelector(PERFORM_SELECTOR, params.performData);
     success = callWithExactGas(gasLimit, upkeep.target, callData);
     gasUsed = gasUsed - gasleft();
 
