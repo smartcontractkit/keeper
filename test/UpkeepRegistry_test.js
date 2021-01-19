@@ -23,7 +23,7 @@ contract('UpkeepRegistry', (accounts) => {
   const executeGas = new BN('100000')
   const paymentPremiumBase = new BN('1000000000')
   const paymentPremiumPPB =  new BN('250000000')
-  const checkFrequencyBlocks = new BN(3)
+  const blockCountPerTurn = new BN(3)
   const emptyBytes = '0x00'
   const zeroAddress = constants.ZERO_ADDRESS
   const extraGas = new BN('250000')
@@ -52,7 +52,7 @@ contract('UpkeepRegistry', (accounts) => {
       linkEthFeed.address,
       gasPriceFeed.address,
       paymentPremiumPPB,
-      checkFrequencyBlocks,
+      blockCountPerTurn,
       maxCheckGas,
       stalenessSeconds,
       fallbackGasPrice,
@@ -806,7 +806,7 @@ contract('UpkeepRegistry', (accounts) => {
     it("updates the config", async () => {
       const old = await registry.getConfig()
       assert.isTrue(paymentPremiumPPB.eq(old.paymentPremiumPPB))
-      assert.isTrue(checkFrequencyBlocks.eq(old.checkFrequencyBlocks))
+      assert.isTrue(blockCountPerTurn.eq(old.blockCountPerTurn))
       assert.isTrue(stalenessSeconds.eq(old.stalenessSeconds))
 
       await registry.setConfig(
@@ -821,7 +821,7 @@ contract('UpkeepRegistry', (accounts) => {
 
       const updated = await registry.getConfig()
       assert.isTrue(updated.paymentPremiumPPB.eq(payment))
-      assert.isTrue(updated.checkFrequencyBlocks.eq(checks))
+      assert.isTrue(updated.blockCountPerTurn.eq(checks))
       assert.isTrue(updated.stalenessSeconds.eq(staleness))
       assert.isTrue(updated.checkGasLimit.eq(maxGas))
       assert.isTrue(updated.fallbackGasPrice.eq(fbGasEth))
@@ -840,7 +840,7 @@ contract('UpkeepRegistry', (accounts) => {
       )
       expectEvent(receipt, 'ConfigSet', {
         paymentPremiumPPB: payment,
-        checkFrequencyBlocks: checks,
+        blockCountPerTurn: checks,
         checkGasLimit: maxGas,
         stalenessSeconds: staleness,
         fallbackGasPrice: fbGasEth,

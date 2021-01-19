@@ -64,7 +64,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard, UpkeepRegistryKee
 
   struct Config {
     uint32 paymentPremiumPPB;
-    uint24 checkFrequencyBlocks;
+    uint24 blockCountPerTurn;
     uint32 checkGasLimit;
     uint24 stalenessSeconds;
   }
@@ -103,7 +103,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard, UpkeepRegistryKee
   );
   event ConfigSet(
     uint32 paymentPremiumPPB,
-    uint24 checkFrequencyBlocks,
+    uint24 blockCountPerTurn,
     uint32 checkGasLimit,
     uint24 stalenessSeconds,
     int256 fallbackGasPrice,
@@ -136,8 +136,8 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard, UpkeepRegistryKee
    * @param fastGasFeed address of the Fast Gas price feed
    * @param paymentPremiumPPB payment premium rate oracles receive on top of
    * being reimbursed for gas, measured in parts per billion
-   * @param checkFrequencyBlocks number of blocks an oracle should wait before
-   * checking for upkeep
+   * @param blockCountPerTurn number of blocks each oracle has during their turn to
+   * perform upkeep before it will be the next keeper's turn to submit
    * @param checkGasLimit gas limit when checking for upkeep
    * @param stalenessSeconds number of seconds that is allowed for feed data to
    * be stale before switching to the fallback pricing
@@ -149,7 +149,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard, UpkeepRegistryKee
     address linkEthFeed,
     address fastGasFeed,
     uint32 paymentPremiumPPB,
-    uint24 checkFrequencyBlocks,
+    uint24 blockCountPerTurn,
     uint32 checkGasLimit,
     uint24 stalenessSeconds,
     int256 fallbackGasPrice,
@@ -163,7 +163,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard, UpkeepRegistryKee
 
     setConfig(
       paymentPremiumPPB,
-      checkFrequencyBlocks,
+      blockCountPerTurn,
       checkGasLimit,
       stalenessSeconds,
       fallbackGasPrice,
@@ -451,7 +451,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard, UpkeepRegistryKee
    * @notice updates the configuration of the registry
    * @param paymentPremiumPPB payment premium rate oracles receive on top of
    * being reimbursed for gas, measured in parts per billion
-   * @param checkFrequencyBlocks number of blocks an oracle should wait before
+   * @param blockCountPerTurn number of blocks an oracle should wait before
    * checking for upkeep
    * @param checkGasLimit gas limit when checking for upkeep
    * @param stalenessSeconds number of seconds that is allowed for feed data to
@@ -461,7 +461,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard, UpkeepRegistryKee
    */
   function setConfig(
     uint32 paymentPremiumPPB,
-    uint24 checkFrequencyBlocks,
+    uint24 blockCountPerTurn,
     uint32 checkGasLimit,
     uint24 stalenessSeconds,
     int256 fallbackGasPrice,
@@ -472,7 +472,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard, UpkeepRegistryKee
   {
     s_config = Config({
       paymentPremiumPPB: paymentPremiumPPB,
-      checkFrequencyBlocks: checkFrequencyBlocks,
+      blockCountPerTurn: blockCountPerTurn,
       checkGasLimit: checkGasLimit,
       stalenessSeconds: stalenessSeconds
     });
@@ -481,7 +481,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard, UpkeepRegistryKee
 
     emit ConfigSet(
       paymentPremiumPPB,
-      checkFrequencyBlocks,
+      blockCountPerTurn,
       checkGasLimit,
       stalenessSeconds,
       fallbackGasPrice,
@@ -620,7 +620,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard, UpkeepRegistryKee
     override
     returns (
       uint32 paymentPremiumPPB,
-      uint24 checkFrequencyBlocks,
+      uint24 blockCountPerTurn,
       uint32 checkGasLimit,
       uint24 stalenessSeconds,
       int256 fallbackGasPrice,
@@ -630,7 +630,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard, UpkeepRegistryKee
     Config memory config = s_config;
     return (
       config.paymentPremiumPPB,
-      config.checkFrequencyBlocks,
+      config.blockCountPerTurn,
       config.checkGasLimit,
       config.stalenessSeconds,
       s_fallbackGasPrice,
