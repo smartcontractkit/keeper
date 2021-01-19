@@ -343,6 +343,7 @@ contract('UpkeepRegistry', (accounts) => {
         const tx = await registry.performUpkeep(id, performData, { from: keeper1, gas: extraGas })
         expectEvent(tx.receipt, 'UpkeepPerformed', {
           success: true,
+          from: keeper1,
           performData: performData
         })
       })

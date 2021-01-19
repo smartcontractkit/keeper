@@ -83,6 +83,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard, UpkeepRegistryKee
   event UpkeepPerformed(
     uint256 indexed id,
     bool indexed success,
+    address indexed from,
     uint96 payment,
     bytes performData
   );
@@ -756,7 +757,13 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard, UpkeepRegistryKee
     uint96 newBalance = s_keeperInfo[params.from].balance.add(payment);
     s_keeperInfo[params.from].balance = newBalance;
 
-    emit UpkeepPerformed(params.id, success, payment, params.performData);
+    emit UpkeepPerformed(
+      params.id,
+      success,
+      params.from,
+      payment,
+      params.performData
+    );
     return success;
   }
 
