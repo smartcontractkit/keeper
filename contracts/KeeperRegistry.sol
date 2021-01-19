@@ -216,6 +216,14 @@ contract KeeperRegistry is Owned, KeeperBase, ReentrancyGuard, KeeperRegistryExe
     return id;
   }
 
+  /*
+   * @notice simulated by keepers via eth_call to see if the upkeep needs to be
+   * performed. If it does need to be performed then the call simulates the
+   * transaction performing upkeep to make sure it succeeds. It then eturns the
+   * success status along with payment information and the perform data payload.
+   * @param id identifier of the upkeep to check
+   * @param from the address to simulate performing the upkeep from
+   */
   function checkForUpkeep(
     uint256 id,
     address from
@@ -257,6 +265,12 @@ contract KeeperRegistry is Owned, KeeperBase, ReentrancyGuard, KeeperRegistryExe
     return (success, performData, maxLinkPayment, gasLimit, gasWei, linkEth);
   }
 
+  /*
+   * @notice executes the upkeep with the perform data returned from
+   * checkForUpkeep, validates the keeper's permissions, and pays the keeper.
+   * @param id identifier of the upkeep to execute the data with.
+   * @param calldata paramter to be passed to the target upkeep.
+   */
   function performUpkeep(
     uint256 id,
     bytes calldata performData
