@@ -7,22 +7,22 @@ import "./vendor/Owned.sol";
 import "./vendor/Address.sol";
 import "./vendor/ReentrancyGuard.sol";
 import "./SafeMath96.sol";
-import "./UpkeepBase.sol";
-import "./UpkeepInterface.sol";
-import "./UpkeepRegistryInterface.sol";
+import "./KeeperBase.sol";
+import "./KeeperCompatibleInterface.sol";
+import "./KeeperRegistryInterface.sol";
 
 /**
   * @notice Registry for adding work for Chainlink Keepers to perform on client
   * contracts. Clients must support the Upkeep interface.
 */
-contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard, UpkeepRegistryKeeperInterface {
+contract KeeperRegistry is Owned, KeeperBase, ReentrancyGuard, KeeperRegistryExecutableInterface {
   using Address for address;
   using SafeMathChainlink for uint256;
   using SafeMath96 for uint96;
 
   address constant private ZERO_ADDRESS = address(0);
-  bytes4 constant private CHECK_SELECTOR = UpkeepInterface.checkForUpkeep.selector;
-  bytes4 constant private PERFORM_SELECTOR = UpkeepInterface.performUpkeep.selector;
+  bytes4 constant private CHECK_SELECTOR = KeeperCompatibleInterface.checkForUpkeep.selector;
+  bytes4 constant private PERFORM_SELECTOR = KeeperCompatibleInterface.performUpkeep.selector;
   uint256 constant private CALL_GAS_MAX = 2_500_000;
   uint256 constant private CALL_GAS_MIN = 2_300;
   uint256 constant private CANCELATION_DELAY = 50;

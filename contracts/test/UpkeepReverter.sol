@@ -1,8 +1,8 @@
 pragma solidity 0.7.6;
 
-import '../UpkeepCompatible.sol';
+import '../KeeperCompatible.sol';
 
-contract UpkeepReverter is UpkeepCompatible {
+contract UpkeepReverter is KeeperCompatible {
 
   function checkForUpkeep(bytes calldata data)
     public

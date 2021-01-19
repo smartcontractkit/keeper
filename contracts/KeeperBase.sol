@@ -1,6 +1,6 @@
 pragma solidity 0.7.6;
 
-contract UpkeepBase {
+contract KeeperBase {
 
   function preventExecution()
     internal

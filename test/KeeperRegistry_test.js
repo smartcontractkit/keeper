@@ -1,11 +1,11 @@
-const UpkeepRegistry = artifacts.require('UpkeepRegistry')
+const KeeperRegistry = artifacts.require('KeeperRegistry')
 const UpkeepMock = artifacts.require('UpkeepMock')
 const UpkeepReverter = artifacts.require('UpkeepReverter')
 const { LinkToken } = require('@chainlink/contracts/truffle/v0.4/LinkToken')
 const { MockV3Aggregator } = require('@chainlink/contracts/truffle/v0.6/MockV3Aggregator')
 const { BN, constants, ether, expectEvent, expectRevert, time } = require('@openzeppelin/test-helpers')
 
-contract('UpkeepRegistry', (accounts) => {
+contract('KeeperRegistry', (accounts) => {
   const owner = accounts[0]
   const keeper1 = accounts[1]
   const keeper2 = accounts[2]
@@ -47,7 +47,7 @@ contract('UpkeepRegistry', (accounts) => {
     linkToken = await LinkToken.new({ from: owner })
     gasPriceFeed = await MockV3Aggregator.new(0, gasWei, { from: owner })
     linkEthFeed = await MockV3Aggregator.new(9, linkEth, { from: owner })
-    registry = await UpkeepRegistry.new(
+    registry = await KeeperRegistry.new(
       linkToken.address,
       linkEthFeed.address,
       gasPriceFeed.address,

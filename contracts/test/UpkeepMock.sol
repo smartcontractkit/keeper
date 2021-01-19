@@ -1,8 +1,8 @@
 pragma solidity 0.7.6;
 
-import '../UpkeepCompatible.sol';
+import '../KeeperCompatible.sol';
 
-contract UpkeepMock is UpkeepCompatible {
+contract UpkeepMock is KeeperCompatible {
   bool public canCheck;
   bool public canPerform;
 

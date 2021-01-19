@@ -1,6 +1,6 @@
 pragma solidity 0.7.6;
 
-interface UpkeepRegistryBaseInterface {
+interface KeeperRegistryBaseInterface {
   function registerUpkeep(
     address target,
     uint32 gasLimit,
@@ -61,7 +61,7 @@ interface UpkeepRegistryBaseInterface {
   * but we want them to be easily queried off-chain. Solidity will not compile
   * if we actually inherrit from this interface, so we document it here.
 */
-interface UpkeepRegistryInterface is UpkeepRegistryBaseInterface {
+interface KeeperRegistryInterface is KeeperRegistryBaseInterface {
   function checkForUpkeep(
     uint256 upkeepId,
     address from
@@ -78,7 +78,7 @@ interface UpkeepRegistryInterface is UpkeepRegistryBaseInterface {
     );
 }
 
-interface UpkeepRegistryKeeperInterface is UpkeepRegistryBaseInterface {
+interface KeeperRegistryExecutableInterface is KeeperRegistryBaseInterface {
   function checkForUpkeep(
     uint256 upkeepId,
     address from
