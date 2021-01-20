@@ -303,7 +303,7 @@ contract KeeperRegistry is Owned, KeeperBase, ReentrancyGuard, KeeperRegistryExe
     uint64 maxValid = s_upkeep[id].maxValidBlocknumber;
     bool notCanceled = maxValid == UINT64_MAX;
     bool isOwner = msg.sender == owner;
-    require(notCanceled || isOwner && maxValid > 0, "cannot cancel upkeep");
+    require(notCanceled || isOwner && maxValid > block.number, "too late to cancel upkeep");
     require(isOwner|| msg.sender == s_upkeep[id].admin, "only owner or admin");
 
     uint256 height = block.number;
@@ -311,7 +311,9 @@ contract KeeperRegistry is Owned, KeeperBase, ReentrancyGuard, KeeperRegistryExe
       height = height.add(CANCELATION_DELAY);
     }
     s_upkeep[id].maxValidBlocknumber = uint64(height);
-    s_canceledUpkeepList.push(id);
+    if (notCanceled) {
+      s_canceledUpkeepList.push(id);
+    }
 
     emit UpkeepCanceled(id, uint64(height));
   }

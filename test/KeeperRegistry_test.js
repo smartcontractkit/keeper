@@ -83,7 +83,7 @@ contract('KeeperRegistry', (accounts) => {
       )
     })
 
-    it('reverts when not called by the owner', async () => {
+    it('reverts when adding the same keeper twice', async () => {
       await expectRevert(
         registry.setKeepers([payee1, payee1], [keeper1, keeper1], {from: owner}),
         "cannot add keeper twice"
@@ -534,7 +534,7 @@ contract('KeeperRegistry', (accounts) => {
     it('reverts if the ID is not valid', async () => {
       await expectRevert(
         registry.cancelUpkeep(id + 1, { from: owner }),
-        'cannot cancel upkeep'
+        'too late to cancel upkeep'
       )
     })
 
@@ -583,7 +583,10 @@ contract('KeeperRegistry', (accounts) => {
 
       it('does not revert if reverts if called multiple times', async () => {
         await registry.cancelUpkeep(id, { from: owner })
-        await registry.cancelUpkeep(id, { from: owner })
+        await expectRevert(
+          registry.cancelUpkeep(id, { from: owner }),
+          'too late to cancel upkeep'
+        )
       })
 
       describe("when called by the owner when the admin has just canceled", () => {
@@ -648,12 +651,34 @@ contract('KeeperRegistry', (accounts) => {
         )
       })
 
-      it('reverts if called multiple times', async () => {
+      it('reverts if called again by the admin', async () => {
         await registry.cancelUpkeep(id, { from: admin })
 
         await expectRevert(
           registry.cancelUpkeep(id, { from: admin }),
-          'cannot cancel upkeep'
+          'too late to cancel upkeep'
+        )
+      })
+
+      it('does not revert or double add the cancellaition record if called by the owner immediately after', async () => {
+        await registry.cancelUpkeep(id, { from: admin })
+
+        await registry.cancelUpkeep(id, { from: owner })
+
+        let canceled = await registry.getCanceledUpkeepList.call()
+        assert.deepEqual([id], canceled)
+      })
+
+      it('reverts if called by the owner after the timeout', async () => {
+        await registry.cancelUpkeep(id, { from: admin })
+
+        for (let i = 0; i < delay; i++) {
+          await time.advanceBlock()
+        }
+
+        await expectRevert(
+          registry.cancelUpkeep(id, { from: owner }),
+          'too late to cancel upkeep'
         )
       })
     })
