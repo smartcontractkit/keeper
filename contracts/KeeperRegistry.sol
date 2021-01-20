@@ -16,7 +16,7 @@ import "./KeeperRegistryInterface.sol";
 /**
   * @notice Registry for adding work for Chainlink Keepers to perform on client
   * contracts. Clients must support the Upkeep interface.
-*/
+  */
 contract KeeperRegistry is Owned, KeeperBase, ReentrancyGuard, KeeperRegistryExecutableInterface {
   using Address for address;
   using SafeMathChainlink for uint256;
@@ -132,7 +132,7 @@ contract KeeperRegistry is Owned, KeeperBase, ReentrancyGuard, KeeperRegistryExe
     address indexed to
   );
 
-  /*
+  /**
    * @param link address of the LINK Token
    * @param linkEthFeed address of the LINK/ETH price feed
    * @param fastGasFeed address of the Fast Gas price feed
@@ -156,9 +156,7 @@ contract KeeperRegistry is Owned, KeeperBase, ReentrancyGuard, KeeperRegistryExe
     uint24 stalenessSeconds,
     int256 fallbackGasPrice,
     int256 fallbackLinkPrice
-  )
-    public
-  {
+  ) {
     LINK = LinkTokenInterface(link);
     LINK_ETH_FEED = AggregatorV3Interface(linkEthFeed);
     FAST_GAS_FEED = AggregatorV3Interface(fastGasFeed);
@@ -176,7 +174,7 @@ contract KeeperRegistry is Owned, KeeperBase, ReentrancyGuard, KeeperRegistryExe
 
   // ACTIONS
 
-  /*
+  /**
    * @notice adds a new upkeep
    * @param target address to peform upkeep on
    * @param gasLimit amount of gas to provide the target contract when
@@ -218,7 +216,7 @@ contract KeeperRegistry is Owned, KeeperBase, ReentrancyGuard, KeeperRegistryExe
     return id;
   }
 
-  /*
+  /**
    * @notice simulated by keepers via eth_call to see if the upkeep needs to be
    * performed. If it does need to be performed then the call simulates the
    * transaction performing upkeep to make sure it succeeds. It then eturns the
@@ -267,11 +265,11 @@ contract KeeperRegistry is Owned, KeeperBase, ReentrancyGuard, KeeperRegistryExe
     return (success, performData, maxLinkPayment, gasLimit, gasWei, linkEth);
   }
 
-  /*
+  /**
    * @notice executes the upkeep with the perform data returned from
    * checkForUpkeep, validates the keeper's permissions, and pays the keeper.
    * @param id identifier of the upkeep to execute the data with.
-   * @param calldata paramter to be passed to the target upkeep.
+   * @param performData calldata paramter to be passed to the target upkeep.
    */
   function performUpkeep(
     uint256 id,
@@ -290,7 +288,7 @@ contract KeeperRegistry is Owned, KeeperBase, ReentrancyGuard, KeeperRegistryExe
     }));
   }
 
-  /*
+  /**
    * @notice prevent an upkeep from being performed in the future
    * @param id upkeep to be canceled
    */
@@ -318,7 +316,7 @@ contract KeeperRegistry is Owned, KeeperBase, ReentrancyGuard, KeeperRegistryExe
     emit UpkeepCanceled(id, uint64(height));
   }
 
-  /*
+  /**
    * @notice adds LINK funding for an upkeep by tranferring from the sender's
    * LINK balance
    * @param id upkeep to fund
@@ -337,7 +335,7 @@ contract KeeperRegistry is Owned, KeeperBase, ReentrancyGuard, KeeperRegistryExe
     emit FundsAdded(id, msg.sender, amount);
   }
 
-  /*
+  /**
    * @notice uses LINK's transferAndCall to LINK and add funding to an upkeep
    * @dev safe to cast uint256 to uint96 as total LINK supply is under UINT96MAX
    * @param sender the account which transferred the funds
@@ -360,10 +358,10 @@ contract KeeperRegistry is Owned, KeeperBase, ReentrancyGuard, KeeperRegistryExe
     emit FundsAdded(id, sender, uint96(amount));
   }
 
-  /*
+  /**
    * @notice removes funding from a cancelled upkeep
    * @param id upkeep to withdraw funds from
-   * @param amount address to send remaining funds to
+   * @param to destination address for sending remaining funds
    */
   function withdrawFunds(
     uint256 id,
@@ -382,7 +380,7 @@ contract KeeperRegistry is Owned, KeeperBase, ReentrancyGuard, KeeperRegistryExe
     LINK.transfer(to, amount);
   }
 
-  /*
+  /**
    * @notice recovers LINK funds improperly transfered to the registry
    */
   function recoverFunds()
@@ -404,7 +402,7 @@ contract KeeperRegistry is Owned, KeeperBase, ReentrancyGuard, KeeperRegistryExe
     LINK.transfer(msg.sender, total.sub(locked));
   }
 
-  /*
+  /**
    * @notice withdraws a keeper's payment, callable only by the keeper's payee
    * @param from keeper address
    * @param to address to send the payment to
@@ -425,10 +423,10 @@ contract KeeperRegistry is Owned, KeeperBase, ReentrancyGuard, KeeperRegistryExe
     LINK.transfer(to, keeper.balance);
   }
 
-  /*
+  /**
    * @notice proposes the safe transfer of a keeper's payee to another address
    * @param keeper address of the keeper to transfer payee role
-   * @param to address transfer payee role to
+   * @param proposed address to nominate for next payeeship
    */
   function transferPayeeship(
     address keeper,
@@ -445,7 +443,7 @@ contract KeeperRegistry is Owned, KeeperBase, ReentrancyGuard, KeeperRegistryExe
     }
   }
 
-  /*
+  /**
    * @notice accepts the safe transfer of payee role for a keeper
    * @param keeper address to accept the payee role for
    */
@@ -465,7 +463,7 @@ contract KeeperRegistry is Owned, KeeperBase, ReentrancyGuard, KeeperRegistryExe
 
   // SETTERS
 
-  /*
+  /**
    * @notice updates the configuration of the registry
    * @param paymentPremiumPPB payment premium rate oracles receive on top of
    * being reimbursed for gas, measured in parts per billion
@@ -507,7 +505,7 @@ contract KeeperRegistry is Owned, KeeperBase, ReentrancyGuard, KeeperRegistryExe
     );
   }
 
-  /*
+  /**
    * @notice update the list of keepers allowed to peform upkeep
    * @param keepers list of addresses allowed to perform upkeep
    * @param payees addreses corresponding to keepers who are allowed to
@@ -541,7 +539,7 @@ contract KeeperRegistry is Owned, KeeperBase, ReentrancyGuard, KeeperRegistryExe
 
   // GETTERS
 
-  /*
+  /**
    * @notice read all of the details about an upkeep
    */
   function getUpkeep(
@@ -572,7 +570,7 @@ contract KeeperRegistry is Owned, KeeperBase, ReentrancyGuard, KeeperRegistryExe
     );
   }
 
-  /*
+  /**
    * @notice read the total number of upkeep's registered
    */
   function getUpkeepCount()
@@ -586,6 +584,9 @@ contract KeeperRegistry is Owned, KeeperBase, ReentrancyGuard, KeeperRegistryExe
     return s_upkeepCount;
   }
 
+  /**
+   * @notice read the current list canceled upkeep IDs
+   */
   function getCanceledUpkeepList()
     external
     view
@@ -597,7 +598,7 @@ contract KeeperRegistry is Owned, KeeperBase, ReentrancyGuard, KeeperRegistryExe
     return s_canceledUpkeepList;
   }
 
-  /*
+  /**
    * @notice read the current list of addresses allowed to perform upkeep
    */
   function getKeeperList()
@@ -611,7 +612,7 @@ contract KeeperRegistry is Owned, KeeperBase, ReentrancyGuard, KeeperRegistryExe
     return s_keeperList;
   }
 
-  /*
+  /**
    * @notice read the current info about any keeper address
    */
   function getKeeperInfo(
@@ -630,7 +631,7 @@ contract KeeperRegistry is Owned, KeeperBase, ReentrancyGuard, KeeperRegistryExe
     return (keeper.payee, keeper.active, keeper.balance);
   }
 
-  /*
+  /**
    * @notice read the current configuration of the registry
    */
   function getConfig()
@@ -660,7 +661,7 @@ contract KeeperRegistry is Owned, KeeperBase, ReentrancyGuard, KeeperRegistryExe
 
   // PRIVATE
 
-  /*
+  /**
    * @dev retrieves feed data for fast gas/eth and link/eth prices. if the feed
    * data is stale it uses the configured fallback price. Once a price is picked
    * for gas it takes the min of gas price in the transaction or the fast gas
@@ -688,7 +689,7 @@ contract KeeperRegistry is Owned, KeeperBase, ReentrancyGuard, KeeperRegistryExe
     return (gasWei, linkEth);
   }
 
-  /*
+  /**
    * @dev calculates LINK paid for gas spent plus a configure premium percentage
    */
   function calculatePaymentAmount(
@@ -709,7 +710,7 @@ contract KeeperRegistry is Owned, KeeperBase, ReentrancyGuard, KeeperRegistryExe
     return uint96(total); // LINK_TOTAL_SUPPLY < UINT96_MAX
   }
 
-  /*
+  /**
    * @dev calls target address with exactly gasAmount gas and data as calldata
    * or reverts if at least gasAmount gas is not available
    */
@@ -739,7 +740,7 @@ contract KeeperRegistry is Owned, KeeperBase, ReentrancyGuard, KeeperRegistryExe
     return success;
   }
 
-  /*
+  /**
    * @dev calls the Upkeep target with the performData param passed in by the
    * keeper and the exact gas required by the Upkeep
    */
@@ -786,7 +787,7 @@ contract KeeperRegistry is Owned, KeeperBase, ReentrancyGuard, KeeperRegistryExe
     return success;
   }
 
-  /*
+  /**
    * @dev ensures a upkeep is valid
    */
   function validateUpkeep(
@@ -801,7 +802,7 @@ contract KeeperRegistry is Owned, KeeperBase, ReentrancyGuard, KeeperRegistryExe
 
   // MODIFIERS
 
-  /*
+  /**
    * @dev ensures a upkeep is valid
    */
   modifier validUpkeep(
@@ -811,7 +812,7 @@ contract KeeperRegistry is Owned, KeeperBase, ReentrancyGuard, KeeperRegistryExe
     _;
   }
 
-  /*
+  /**
    * @dev ensures that burns don't accidentally happen by sending to the zero
    * address
    */

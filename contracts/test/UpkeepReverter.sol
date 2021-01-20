@@ -8,6 +8,7 @@ contract UpkeepReverter is KeeperCompatible {
 
   function checkForUpkeep(bytes calldata data)
     public
+    view
     override
     cannotExecute()
     returns (
@@ -23,6 +24,7 @@ contract UpkeepReverter is KeeperCompatible {
     bytes calldata
   )
     external
+    pure
     override
   {
     require(false, "!working");
