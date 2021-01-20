@@ -746,11 +746,11 @@ contract KeeperRegistry is Owned, KeeperBase, ReentrancyGuard, KeeperRegistryExe
   )
     private
     nonReentrant()
+    validUpkeep(params.id)
     returns (
       bool success
     )
   {
-    validateUpkeep(params.id);
     require(s_keeperInfo[params.from].active, "only active keepers");
     Upkeep memory upkeep = s_upkeep[params.id];
     uint256 gasLimit = upkeep.executeGas;
