@@ -83,6 +83,13 @@ contract('KeeperRegistry', (accounts) => {
       )
     })
 
+    it('reverts when not called by the owner', async () => {
+      await expectRevert(
+        registry.setKeepers([payee1, payee1], [keeper1, keeper1], {from: owner}),
+        "cannot add keeper twice"
+      )
+    })
+
     it('emits events for every keeper added and removed', async () => {
       const oldKeepers = [keeper1, keeper2]
       const oldPayees = [payee1, payee2]

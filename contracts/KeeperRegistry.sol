@@ -526,6 +526,7 @@ contract KeeperRegistry is Owned, KeeperBase, ReentrancyGuard, KeeperRegistryExe
       address oldPayee = s_keeper.payee;
       address newPayee = payees[i];
       require(oldPayee == ZERO_ADDRESS || oldPayee == newPayee, "cannot change payee");
+      require(!s_keeper.active, "cannot add keeper twice");
       s_keeper.payee = newPayee;
       s_keeper.active = true;
     }
