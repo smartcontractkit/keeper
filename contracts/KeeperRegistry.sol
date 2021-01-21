@@ -382,6 +382,9 @@ contract KeeperRegistry is Owned, KeeperBase, ReentrancyGuard, KeeperRegistryExe
 
   /**
    * @notice recovers LINK funds improperly transfered to the registry
+   * @dev In principle this function’s execution cost could exceed block
+   * gaslimit. However, in our anticipated deployment, the number of upkeeps and
+   * keepers will be low enough to avoid this problem.
    */
   function recoverFunds()
     external
