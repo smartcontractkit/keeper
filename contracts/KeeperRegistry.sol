@@ -23,7 +23,7 @@ contract KeeperRegistry is Owned, KeeperBase, ReentrancyGuard, KeeperRegistryExe
   using SafeMath96 for uint96;
 
   address constant private ZERO_ADDRESS = address(0);
-  bytes4 constant private CHECK_SELECTOR = KeeperCompatibleInterface.checkForUpkeep.selector;
+  bytes4 constant private CHECK_SELECTOR = KeeperCompatibleInterface.checkUpkeep.selector;
   bytes4 constant private PERFORM_SELECTOR = KeeperCompatibleInterface.performUpkeep.selector;
   uint256 constant private CALL_GAS_MAX = 2_500_000;
   uint256 constant private CALL_GAS_MIN = 2_300;
@@ -224,7 +224,7 @@ contract KeeperRegistry is Owned, KeeperBase, ReentrancyGuard, KeeperRegistryExe
    * @param id identifier of the upkeep to check
    * @param from the address to simulate performing the upkeep from
    */
-  function checkForUpkeep(
+  function checkUpkeep(
     uint256 id,
     address from
   )
@@ -270,7 +270,7 @@ contract KeeperRegistry is Owned, KeeperBase, ReentrancyGuard, KeeperRegistryExe
 
   /**
    * @notice executes the upkeep with the perform data returned from
-   * checkForUpkeep, validates the keeper's permissions, and pays the keeper.
+   * checkUpkeep, validates the keeper's permissions, and pays the keeper.
    * @param id identifier of the upkeep to execute the data with.
    * @param performData calldata paramter to be passed to the target upkeep.
    */

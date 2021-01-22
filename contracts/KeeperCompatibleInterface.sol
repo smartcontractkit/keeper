@@ -16,7 +16,7 @@ interface KeeperCompatibleInterface {
    * @return success bytes that the keeper should call performUpkeep with, if
    * upkeep is needed.
    */
-  function checkForUpkeep(
+  function checkUpkeep(
     bytes calldata data
   )
     external

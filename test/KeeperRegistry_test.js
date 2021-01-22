@@ -232,10 +232,10 @@ contract('KeeperRegistry', (accounts) => {
     })
   })
 
-  describe('#checkForUpkeep', () => {
+  describe('#checkUpkeep', () => {
     it('reverts if the upkeep is not funded', async () => {
       await expectRevert(
-        registry.checkForUpkeep.call(id, keeper1, {from: zeroAddress}),
+        registry.checkUpkeep.call(id, keeper1, {from: zeroAddress}),
         "insufficient funds"
       )
     })
@@ -250,7 +250,7 @@ contract('KeeperRegistry', (accounts) => {
         await mock.setCanPerform(true)
         await mock.setCanCheck(true)
         await expectRevert(
-          registry.checkForUpkeep(id, keeper1),
+          registry.checkUpkeep(id, keeper1),
           'only for simulated backend'
         )
       })
@@ -259,7 +259,7 @@ contract('KeeperRegistry', (accounts) => {
         await mock.setCanPerform(true)
         await mock.setCanCheck(true)
         await expectRevert(
-          registry.checkForUpkeep(id, owner),
+          registry.checkUpkeep(id, owner),
           'only for simulated backend'
         )
       })
@@ -271,7 +271,7 @@ contract('KeeperRegistry', (accounts) => {
 
         it('reverts', async () => {
           await expectRevert(
-            registry.checkForUpkeep.call(id, keeper1, {from: zeroAddress}),
+            registry.checkUpkeep.call(id, keeper1, {from: zeroAddress}),
             'upkeep not needed'
           )
         })
@@ -294,7 +294,7 @@ contract('KeeperRegistry', (accounts) => {
 
         it('reverts', async () => {
           await expectRevert(
-            registry.checkForUpkeep.call(id, keeper1, {from: zeroAddress}),
+            registry.checkUpkeep.call(id, keeper1, {from: zeroAddress}),
             'call to check target failed'
           )
         })
@@ -308,7 +308,7 @@ contract('KeeperRegistry', (accounts) => {
 
         it('reverts', async () => {
           await expectRevert(
-            registry.checkForUpkeep.call(id, keeper1, {from: zeroAddress}),
+            registry.checkUpkeep.call(id, keeper1, {from: zeroAddress}),
             'call to perform upkeep failed'
           )
         })
@@ -321,7 +321,7 @@ contract('KeeperRegistry', (accounts) => {
         })
 
         it('returns true with pricing info if the target can execute', async () => {
-          const response = await registry.checkForUpkeep.call(id, keeper1, {from: zeroAddress})
+          const response = await registry.checkUpkeep.call(id, keeper1, {from: zeroAddress})
 
           assert.isTrue(response.gasLimit.eq(executeGas))
           assert.isTrue(response.linkEth.eq(linkEth))
@@ -347,14 +347,14 @@ contract('KeeperRegistry', (accounts) => {
       })
 
       it('does not revert if the target cannot execute', async () => {
-        const mockResponse = await mock.checkForUpkeep.call("0x", { from: zeroAddress })
+        const mockResponse = await mock.checkUpkeep.call("0x", { from: zeroAddress })
         assert.isFalse(mockResponse.callable)
 
         await registry.performUpkeep(id, "0x", { from: keeper3 })
       })
 
       it('returns false if the target cannot execute', async () => {
-        const mockResponse = await mock.checkForUpkeep.call("0x", { from: zeroAddress })
+        const mockResponse = await mock.checkUpkeep.call("0x", { from: zeroAddress })
         assert.isFalse(mockResponse.callable)
 
         assert.isFalse(await registry.performUpkeep.call(id, "0x", { from: keeper1 }))
@@ -417,7 +417,7 @@ contract('KeeperRegistry', (accounts) => {
         const difference = after.sub(before)
         assert.isTrue(max.gt(totalTx))
         assert.isTrue(totalTx.gt(difference))
-        assert.isTrue(linkForGas(3200).lt(difference)) // exact number is flaky
+        assert.isTrue(linkForGas(3100).lt(difference)) // exact number is flaky
         assert.isTrue(linkForGas(3300).gt(difference)) // instead test a range
       })
 

@@ -64,7 +64,7 @@ interface KeeperRegistryBaseInterface {
   * if we actually inherrit from this interface, so we document it here.
 */
 interface KeeperRegistryInterface is KeeperRegistryBaseInterface {
-  function checkForUpkeep(
+  function checkUpkeep(
     uint256 upkeepId,
     address from
   )
@@ -80,7 +80,7 @@ interface KeeperRegistryInterface is KeeperRegistryBaseInterface {
 }
 
 interface KeeperRegistryExecutableInterface is KeeperRegistryBaseInterface {
-  function checkForUpkeep(
+  function checkUpkeep(
     uint256 upkeepId,
     address from
   )

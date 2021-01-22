@@ -22,7 +22,7 @@ contract UpkeepMock is KeeperCompatible {
     canPerform = value;
   }
 
-  function checkForUpkeep(bytes calldata data)
+  function checkUpkeep(bytes calldata data)
     external
     override
     cannotExecute()

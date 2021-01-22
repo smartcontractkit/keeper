@@ -6,7 +6,7 @@ import '../KeeperCompatible.sol';
 
 contract UpkeepReverter is KeeperCompatible {
 
-  function checkForUpkeep(bytes calldata data)
+  function checkUpkeep(bytes calldata data)
     public
     view
     override
