@@ -71,7 +71,6 @@ interface KeeperRegistryInterface is KeeperRegistryBaseInterface {
     external
     view
     returns (
-      bool canPerform,
       bytes memory performData,
       uint256 maxLinkPayment,
       uint256 gasLimit,
@@ -87,7 +86,6 @@ interface KeeperRegistryExecutableInterface is KeeperRegistryBaseInterface {
   )
     external
     returns (
-      bool canPerform,
       bytes memory performData,
       uint256 maxLinkPayment,
       uint256 gasLimit,

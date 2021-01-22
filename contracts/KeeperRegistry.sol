@@ -232,7 +232,6 @@ contract KeeperRegistry is Owned, KeeperBase, ReentrancyGuard, KeeperRegistryExe
     override
     cannotExecute()
     returns (
-      bool canPerform,
       bytes memory performData,
       uint256 maxLinkPayment,
       uint256 gasLimit,
@@ -244,25 +243,29 @@ contract KeeperRegistry is Owned, KeeperBase, ReentrancyGuard, KeeperRegistryExe
     gasLimit = upkeep.executeGas;
     (gasWei, linkEth) = getFeedData();
     maxLinkPayment = calculatePaymentAmount(gasLimit, gasWei, linkEth);
-    if (upkeep.balance < maxLinkPayment) {
-      return (false, performData, 0, 0, 0, 0);
-    }
+    require(maxLinkPayment < upkeep.balance, "insufficient funds");
 
     bytes memory callData = abi.encodeWithSelector(CHECK_SELECTOR, s_checkData[id]);
     (
       bool success,
       bytes memory result
     ) = upkeep.target.call{gas: s_config.checkGasLimit}(callData);
-    (canPerform, performData) = abi.decode(result, (bool, bytes));
-    if (!success || !canPerform) {
-      return (false, performData, 0, 0, 0, 0);
-    }
+    require(success, "call to check target failed");
+
+    (
+      success,
+      performData
+    ) = abi.decode(result, (bool, bytes));
+    require(success, "upkeep not needed");
+
     success = performUpkeepWithParams(PerformParams({
       from: from,
       id: id,
       performData: performData
     }));
-    return (success, performData, maxLinkPayment, gasLimit, gasWei, linkEth);
+    require(success, "call to perform upkeep failed");
+
+    return (performData, maxLinkPayment, gasLimit, gasWei, linkEth);
   }
 
   /**
