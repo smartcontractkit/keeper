@@ -304,7 +304,7 @@ contract KeeperRegistry is Owned, KeeperBase, ReentrancyGuard, KeeperRegistryExe
     uint64 maxValid = s_upkeep[id].maxValidBlocknumber;
     bool notCanceled = maxValid == UINT64_MAX;
     bool isOwner = msg.sender == owner;
-    require(notCanceled || isOwner && maxValid > block.number, "too late to cancel upkeep");
+    require(notCanceled || (isOwner && maxValid > block.number), "too late to cancel upkeep");
     require(isOwner|| msg.sender == s_upkeep[id].admin, "only owner or admin");
 
     uint256 height = block.number;
