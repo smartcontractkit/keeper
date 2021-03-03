@@ -1,31 +1,41 @@
-pragma solidity 0.6.12;
+// SPDX-License-Identifier: MIT
 
-import '../UpkeepCompatible.sol';
+pragma solidity 0.7.6;
 
-contract UpkeepMock is UpkeepCompatible {
-  bool public canExecute;
+import '../KeeperCompatible.sol';
+
+contract UpkeepMock is KeeperCompatible {
+  bool public canCheck;
+  bool public canPerform;
 
   event UpkeepPerformedWith(bytes upkeepData);
 
-  function setCanExecute(bool value)
+  function setCanCheck(bool value)
     public
   {
-    canExecute = value;
+    canCheck = value;
   }
 
-  function checkForUpkeep(bytes calldata data)
+  function setCanPerform(bool value)
+    public
+  {
+    canPerform = value;
+  }
+
+  function checkUpkeep(bytes calldata data)
     external
     override
+    cannotExecute()
     returns (
       bool callable,
       bytes calldata executedata
     )
   {
-    bool couldExecute = canExecute;
+    bool couldCheck = canCheck;
 
-    setCanExecute(false); // test that state modifcations don't stick
+    setCanCheck(false); // test that state modifcations don't stick
 
-    return (couldExecute, data);
+    return (couldCheck, data);
   }
 
   function performUpkeep(
@@ -34,9 +44,9 @@ contract UpkeepMock is UpkeepCompatible {
     external
     override
   {
-    require(canExecute, "Cannot execute");
+    require(canPerform, "Cannot perform");
 
-    setCanExecute(false);
+    setCanPerform(false);
 
     emit UpkeepPerformedWith(data);
   }

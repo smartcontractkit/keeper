@@ -1,36 +1,36 @@
-pragma solidity 0.6.12;
+// SPDX-License-Identifier: MIT
+
+pragma solidity 0.7.6;
 
 import "@chainlink/contracts/src/v0.6/interfaces/AggregatorV3Interface.sol";
-import "@chainlink/contracts/src/v0.6/Owned.sol";
-import "@openzeppelin/contracts/math/SafeMath.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
-import "@openzeppelin/contracts/utils/Address.sol";
-import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import "@chainlink/contracts/src/v0.7/interfaces/LinkTokenInterface.sol";
+import "@chainlink/contracts/src/v0.7/vendor/SafeMathChainlink.sol";
+import "./vendor/Owned.sol";
+import "./vendor/Address.sol";
+import "./vendor/ReentrancyGuard.sol";
 import "./SafeMath96.sol";
-import "./UpkeepBase.sol";
-import "./UpkeepInterface.sol";
+import "./KeeperBase.sol";
+import "./KeeperCompatibleInterface.sol";
+import "./KeeperRegistryInterface.sol";
 
 /**
   * @notice Registry for adding work for Chainlink Keepers to perform on client
   * contracts. Clients must support the Upkeep interface.
-*/
-contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
+  */
+contract KeeperRegistry is Owned, KeeperBase, ReentrancyGuard, KeeperRegistryExecutableInterface {
   using Address for address;
-  using SafeERC20 for IERC20;
-  using SafeMath for uint256;
+  using SafeMathChainlink for uint256;
   using SafeMath96 for uint96;
 
   address constant private ZERO_ADDRESS = address(0);
-  bytes4 constant private CHECK_SELECTOR = UpkeepInterface.checkForUpkeep.selector;
-  bytes4 constant private PERFORM_SELECTOR = UpkeepInterface.performUpkeep.selector;
+  bytes4 constant private CHECK_SELECTOR = KeeperCompatibleInterface.checkUpkeep.selector;
+  bytes4 constant private PERFORM_SELECTOR = KeeperCompatibleInterface.performUpkeep.selector;
   uint256 constant private CALL_GAS_MAX = 2_500_000;
   uint256 constant private CALL_GAS_MIN = 2_300;
   uint256 constant private CANCELATION_DELAY = 50;
-  uint256 constant private CUSHION = 3_000;
-  uint256 constant private LINK_DIVISIBILITY = 1e18;
+  uint256 constant private CUSHION = 5_000;
   uint256 constant private REGISTRY_GAS_OVERHEAD = 80_000;
-  uint32 constant private PPB_BASE = 1_000_000_000;
+  uint256 constant private PPB_BASE = 1_000_000_000;
   uint64 constant private UINT64_MAX = 2**64 - 1;
   uint96 constant private LINK_TOTAL_SUPPLY = 1e27;
 
@@ -45,7 +45,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
   int256 private s_fallbackGasPrice;  // not in config object for gas savings
   int256 private s_fallbackLinkPrice; // not in config object for gas savings
 
-  IERC20 public immutable LINK;
+  LinkTokenInterface public immutable LINK;
   AggregatorV3Interface public immutable LINK_ETH_FEED;
   AggregatorV3Interface public immutable FAST_GAS_FEED;
 
@@ -66,9 +66,15 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
 
   struct Config {
     uint32 paymentPremiumPPB;
-    uint24 checkFrequencyBlocks;
+    uint24 blockCountPerTurn;
     uint32 checkGasLimit;
     uint24 stalenessSeconds;
+  }
+
+  struct PerformParams {
+    address from;
+    uint256 id;
+    bytes performData;
   }
 
   event UpkeepRegistered(
@@ -79,6 +85,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
   event UpkeepPerformed(
     uint256 indexed id,
     bool indexed success,
+    address indexed from,
     uint96 payment,
     bytes performData
   );
@@ -98,7 +105,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
   );
   event ConfigSet(
     uint32 paymentPremiumPPB,
-    uint24 checkFrequencyBlocks,
+    uint24 blockCountPerTurn,
     uint32 checkGasLimit,
     uint24 stalenessSeconds,
     int256 fallbackGasPrice,
@@ -125,14 +132,14 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
     address indexed to
   );
 
-  /*
+  /**
    * @param link address of the LINK Token
    * @param linkEthFeed address of the LINK/ETH price feed
    * @param fastGasFeed address of the Fast Gas price feed
    * @param paymentPremiumPPB payment premium rate oracles receive on top of
-   * being reimbursed for gas, measured in parts per thousand
-   * @param checkFrequencyBlocks number of blocks an oracle should wait before
-   * checking for upkeep
+   * being reimbursed for gas, measured in parts per billion
+   * @param blockCountPerTurn number of blocks each oracle has during their turn to
+   * perform upkeep before it will be the next keeper's turn to submit
    * @param checkGasLimit gas limit when checking for upkeep
    * @param stalenessSeconds number of seconds that is allowed for feed data to
    * be stale before switching to the fallback pricing
@@ -144,21 +151,19 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
     address linkEthFeed,
     address fastGasFeed,
     uint32 paymentPremiumPPB,
-    uint24 checkFrequencyBlocks,
+    uint24 blockCountPerTurn,
     uint32 checkGasLimit,
     uint24 stalenessSeconds,
     int256 fallbackGasPrice,
     int256 fallbackLinkPrice
-  )
-    public
-  {
-    LINK = IERC20(link);
+  ) {
+    LINK = LinkTokenInterface(link);
     LINK_ETH_FEED = AggregatorV3Interface(linkEthFeed);
     FAST_GAS_FEED = AggregatorV3Interface(fastGasFeed);
 
     setConfig(
       paymentPremiumPPB,
-      checkFrequencyBlocks,
+      blockCountPerTurn,
       checkGasLimit,
       stalenessSeconds,
       fallbackGasPrice,
@@ -169,7 +174,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
 
   // ACTIONS
 
-  /*
+  /**
    * @notice adds a new upkeep
    * @param target address to peform upkeep on
    * @param gasLimit amount of gas to provide the target contract when
@@ -184,13 +189,17 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
     bytes calldata checkData
   )
     external
+    override
     onlyOwner()
+    returns (
+      uint256 id
+    )
   {
     require(target.isContract(), "target is not a contract");
     require(gasLimit >= CALL_GAS_MIN, "min gas is 2300");
     require(gasLimit <= CALL_GAS_MAX, "max gas is 2500000");
 
-    uint256 id = s_upkeepCount;
+    id = s_upkeepCount;
     s_upkeep[id] = Upkeep({
       target: target,
       executeGas: gasLimit,
@@ -203,15 +212,26 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
     s_upkeepCount++;
 
     emit UpkeepRegistered(id, gasLimit, admin);
+
+    return id;
   }
 
-  function checkForUpkeep(
-    uint256 id
+  /**
+   * @notice simulated by keepers via eth_call to see if the upkeep needs to be
+   * performed. If it does need to be performed then the call simulates the
+   * transaction performing upkeep to make sure it succeeds. It then eturns the
+   * success status along with payment information and the perform data payload.
+   * @param id identifier of the upkeep to check
+   * @param from the address to simulate performing the upkeep from
+   */
+  function checkUpkeep(
+    uint256 id,
+    address from
   )
     external
+    override
     cannotExecute()
     returns (
-      bool canPerform,
       bytes memory performData,
       uint256 maxLinkPayment,
       uint256 gasLimit,
@@ -223,81 +243,55 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
     gasLimit = upkeep.executeGas;
     (gasWei, linkEth) = getFeedData();
     maxLinkPayment = calculatePaymentAmount(gasLimit, gasWei, linkEth);
-    if (upkeep.balance < maxLinkPayment) {
-      return (false, performData, 0, 0, 0, 0);
-    }
+    require(maxLinkPayment < upkeep.balance, "insufficient funds");
 
     bytes memory callData = abi.encodeWithSelector(CHECK_SELECTOR, s_checkData[id]);
     (
       bool success,
       bytes memory result
     ) = upkeep.target.call{gas: s_config.checkGasLimit}(callData);
-    if (!success) {
-      return (false, performData, 0, 0, 0, 0);
-    }
-    (canPerform, performData) = abi.decode(result, (bool, bytes));
-    return (canPerform, performData, maxLinkPayment, gasLimit, gasWei, linkEth);
+    require(success, "call to check target failed");
+
+    (
+      success,
+      performData
+    ) = abi.decode(result, (bool, bytes));
+    require(success, "upkeep not needed");
+
+    success = performUpkeepWithParams(PerformParams({
+      from: from,
+      id: id,
+      performData: performData
+    }));
+    require(success, "call to perform upkeep failed");
+
+    return (performData, maxLinkPayment, gasLimit, gasWei, linkEth);
   }
 
-  function tryUpkeep(
-    uint256 id,
-    bytes calldata performData
-  )
-    external
-    cannotExecute()
-    validUpkeep(id)
-    returns (
-      bool success
-    )
-  {
-    Upkeep memory upkeep = s_upkeep[id];
-    uint256 gasLimit = upkeep.executeGas;
-    (int256 gasWei, int256 linkEth) = getFeedData();
-    uint96 payment = calculatePaymentAmount(gasLimit, gasWei, linkEth);
-    if (upkeep.balance < payment) {
-      return false;
-    }
-
-    bytes memory callData = abi.encodeWithSelector(PERFORM_SELECTOR, performData);
-
-    return callWithExactGas(gasLimit, upkeep.target, callData);
-  }
-
+  /**
+   * @notice executes the upkeep with the perform data returned from
+   * checkUpkeep, validates the keeper's permissions, and pays the keeper.
+   * @param id identifier of the upkeep to execute the data with.
+   * @param performData calldata paramter to be passed to the target upkeep.
+   */
   function performUpkeep(
     uint256 id,
     bytes calldata performData
   )
     external
-    nonReentrant()
-    validateKeeper()
-    validUpkeep(id)
+    override
+    returns (
+      bool success
+    )
   {
-    Upkeep memory upkeep = s_upkeep[id];
-    uint256 gasLimit = upkeep.executeGas;
-    (int256 gasWei, int256 linkEth) = getFeedData();
-    if (gasWei > int256(tx.gasprice)) {
-      gasWei = int256(tx.gasprice);
-    }
-    uint96 payment = calculatePaymentAmount(gasLimit, gasWei, linkEth);
-    require(upkeep.balance >= payment, "!executable");
-    require(upkeep.lastKeeper != msg.sender, "keepers must take turns");
-
-    uint256  gasUsed = gasleft();
-    bytes memory callData = abi.encodeWithSelector(PERFORM_SELECTOR, performData);
-    bool success = callWithExactGas(gasLimit, upkeep.target, callData);
-    gasUsed = gasUsed - gasleft();
-
-    payment = calculatePaymentAmount(gasUsed, gasWei, linkEth);
-    upkeep.balance = upkeep.balance.sub(payment);
-    upkeep.lastKeeper = msg.sender;
-    s_upkeep[id] = upkeep;
-    uint96 newBalance = s_keeperInfo[msg.sender].balance.add(payment);
-    s_keeperInfo[msg.sender].balance = newBalance;
-
-    emit UpkeepPerformed(id, success, payment, performData);
+    return performUpkeepWithParams(PerformParams({
+      from: msg.sender,
+      id: id,
+      performData: performData
+    }));
   }
 
-  /*
+  /**
    * @notice prevent an upkeep from being performed in the future
    * @param id upkeep to be canceled
    */
@@ -305,9 +299,12 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
     uint256 id
   )
     external
+    override
   {
-    require(s_upkeep[id].maxValidBlocknumber == UINT64_MAX, "cannot cancel upkeep");
+    uint64 maxValid = s_upkeep[id].maxValidBlocknumber;
+    bool notCanceled = maxValid == UINT64_MAX;
     bool isOwner = msg.sender == owner;
+    require(notCanceled || (isOwner && maxValid > block.number), "too late to cancel upkeep");
     require(isOwner|| msg.sender == s_upkeep[id].admin, "only owner or admin");
 
     uint256 height = block.number;
@@ -315,12 +312,14 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
       height = height.add(CANCELATION_DELAY);
     }
     s_upkeep[id].maxValidBlocknumber = uint64(height);
-    s_canceledUpkeepList.push(id);
+    if (notCanceled) {
+      s_canceledUpkeepList.push(id);
+    }
 
     emit UpkeepCanceled(id, uint64(height));
   }
 
-  /*
+  /**
    * @notice adds LINK funding for an upkeep by tranferring from the sender's
    * LINK balance
    * @param id upkeep to fund
@@ -331,6 +330,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
     uint96 amount
   )
     external
+    override
     validUpkeep(id)
   {
     s_upkeep[id].balance = s_upkeep[id].balance.add(amount);
@@ -338,7 +338,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
     emit FundsAdded(id, msg.sender, amount);
   }
 
-  /*
+  /**
    * @notice uses LINK's transferAndCall to LINK and add funding to an upkeep
    * @dev safe to cast uint256 to uint96 as total LINK supply is under UINT96MAX
    * @param sender the account which transferred the funds
@@ -361,16 +361,17 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
     emit FundsAdded(id, sender, uint96(amount));
   }
 
-  /*
+  /**
    * @notice removes funding from a cancelled upkeep
    * @param id upkeep to withdraw funds from
-   * @param amount address to send remaining funds to
+   * @param to destination address for sending remaining funds
    */
   function withdrawFunds(
     uint256 id,
     address to
   )
     external
+    validateRecipient(to)
   {
     require(s_upkeep[id].admin == msg.sender, "only callable by admin");
     require(s_upkeep[id].maxValidBlocknumber <= block.number, "upkeep must be canceled");
@@ -382,7 +383,32 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
     LINK.transfer(to, amount);
   }
 
-  /*
+  /**
+   * @notice recovers LINK funds improperly transfered to the registry
+   * @dev In principle this function’s execution cost could exceed block
+   * gaslimit. However, in our anticipated deployment, the number of upkeeps and
+   * keepers will be low enough to avoid this problem.
+   */
+  function recoverFunds()
+    external
+    onlyOwner()
+  {
+    uint96 locked = 0;
+    uint256 max = s_upkeepCount;
+    for (uint256 i = 0; i < max; i++) {
+      locked = s_upkeep[i].balance.add(locked);
+    }
+    max = s_keeperList.length;
+    for (uint256 i = 0; i < max; i++) {
+      address addr = s_keeperList[i];
+      locked = s_keeperInfo[addr].balance.add(locked);
+    }
+
+    uint256 total = LINK.balanceOf(address(this));
+    LINK.transfer(msg.sender, total.sub(locked));
+  }
+
+  /**
    * @notice withdraws a keeper's payment, callable only by the keeper's payee
    * @param from keeper address
    * @param to address to send the payment to
@@ -392,6 +418,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
     address to
   )
     external
+    validateRecipient(to)
   {
     KeeperInfo memory keeper = s_keeperInfo[from];
     require(keeper.payee == msg.sender, "only callable by payee");
@@ -402,10 +429,10 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
     LINK.transfer(to, keeper.balance);
   }
 
-  /*
+  /**
    * @notice proposes the safe transfer of a keeper's payee to another address
    * @param keeper address of the keeper to transfer payee role
-   * @param to address transfer payee role to
+   * @param proposed address to nominate for next payeeship
    */
   function transferPayeeship(
     address keeper,
@@ -422,7 +449,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
     }
   }
 
-  /*
+  /**
    * @notice accepts the safe transfer of payee role for a keeper
    * @param keeper address to accept the payee role for
    */
@@ -442,11 +469,11 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
 
   // SETTERS
 
-  /*
+  /**
    * @notice updates the configuration of the registry
    * @param paymentPremiumPPB payment premium rate oracles receive on top of
-   * being reimbursed for gas, measured in parts per thousand
-   * @param checkFrequencyBlocks number of blocks an oracle should wait before
+   * being reimbursed for gas, measured in parts per billion
+   * @param blockCountPerTurn number of blocks an oracle should wait before
    * checking for upkeep
    * @param checkGasLimit gas limit when checking for upkeep
    * @param stalenessSeconds number of seconds that is allowed for feed data to
@@ -456,7 +483,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
    */
   function setConfig(
     uint32 paymentPremiumPPB,
-    uint24 checkFrequencyBlocks,
+    uint24 blockCountPerTurn,
     uint32 checkGasLimit,
     uint24 stalenessSeconds,
     int256 fallbackGasPrice,
@@ -467,7 +494,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
   {
     s_config = Config({
       paymentPremiumPPB: paymentPremiumPPB,
-      checkFrequencyBlocks: checkFrequencyBlocks,
+      blockCountPerTurn: blockCountPerTurn,
       checkGasLimit: checkGasLimit,
       stalenessSeconds: stalenessSeconds
     });
@@ -476,7 +503,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
 
     emit ConfigSet(
       paymentPremiumPPB,
-      checkFrequencyBlocks,
+      blockCountPerTurn,
       checkGasLimit,
       stalenessSeconds,
       fallbackGasPrice,
@@ -484,7 +511,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
     );
   }
 
-  /*
+  /**
    * @notice update the list of keepers allowed to peform upkeep
    * @param keepers list of addresses allowed to perform upkeep
    * @param payees addreses corresponding to keepers who are allowed to
@@ -507,6 +534,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
       address oldPayee = s_keeper.payee;
       address newPayee = payees[i];
       require(oldPayee == ZERO_ADDRESS || oldPayee == newPayee, "cannot change payee");
+      require(!s_keeper.active, "cannot add keeper twice");
       s_keeper.payee = newPayee;
       s_keeper.active = true;
     }
@@ -517,7 +545,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
 
   // GETTERS
 
-  /*
+  /**
    * @notice read all of the details about an upkeep
    */
   function getUpkeep(
@@ -525,6 +553,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
   )
     external
     view
+    override
     returns (
       address target,
       uint32 executeGas,
@@ -547,12 +576,13 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
     );
   }
 
-  /*
+  /**
    * @notice read the total number of upkeep's registered
    */
   function getUpkeepCount()
     external
     view
+    override
     returns (
       uint256
     )
@@ -560,9 +590,13 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
     return s_upkeepCount;
   }
 
+  /**
+   * @notice read the current list canceled upkeep IDs
+   */
   function getCanceledUpkeepList()
     external
     view
+    override
     returns (
       uint256[] memory
     )
@@ -570,12 +604,13 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
     return s_canceledUpkeepList;
   }
 
-  /*
+  /**
    * @notice read the current list of addresses allowed to perform upkeep
    */
   function getKeeperList()
     external
     view
+    override
     returns (
       address[] memory
     )
@@ -583,7 +618,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
     return s_keeperList;
   }
 
-  /*
+  /**
    * @notice read the current info about any keeper address
    */
   function getKeeperInfo(
@@ -591,6 +626,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
   )
     external
     view
+    override
     returns (
       address payee,
       bool active,
@@ -601,15 +637,16 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
     return (keeper.payee, keeper.active, keeper.balance);
   }
 
-  /*
+  /**
    * @notice read the current configuration of the registry
    */
   function getConfig()
     external
     view
+    override
     returns (
       uint32 paymentPremiumPPB,
-      uint24 checkFrequencyBlocks,
+      uint24 blockCountPerTurn,
       uint32 checkGasLimit,
       uint24 stalenessSeconds,
       int256 fallbackGasPrice,
@@ -619,7 +656,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
     Config memory config = s_config;
     return (
       config.paymentPremiumPPB,
-      config.checkFrequencyBlocks,
+      config.blockCountPerTurn,
       config.checkGasLimit,
       config.stalenessSeconds,
       s_fallbackGasPrice,
@@ -630,11 +667,11 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
 
   // PRIVATE
 
-  /*
-   * @dev retrieves feed data for fast gas/eth and link/eth prices. if the feed data
-   * is stale it uses the configured fallback price. once a price is picked for
-   * gas it takes the min of gas price in the transaction or the fast gas price
-   * in order to reduce costs for the upkeep clients.
+  /**
+   * @dev retrieves feed data for fast gas/eth and link/eth prices. if the feed
+   * data is stale it uses the configured fallback price. Once a price is picked
+   * for gas it takes the min of gas price in the transaction or the fast gas
+   * price in order to reduce costs for the upkeep clients.
    */
   function getFeedData()
     private
@@ -658,7 +695,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
     return (gasWei, linkEth);
   }
 
-  /*
+  /**
    * @dev calculates LINK paid for gas spent plus a configure premium percentage
    */
   function calculatePaymentAmount(
@@ -673,16 +710,15 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
     )
   {
     uint256 weiForGas = uint256(gasWei).mul(gasLimit.add(REGISTRY_GAS_OVERHEAD));
-    uint256 linkForGas = weiForGas.mul(LINK_DIVISIBILITY).div(uint256(linkEth));
-    uint256 premium = linkForGas.mul(s_config.paymentPremiumPPB).div(PPB_BASE);
-    uint256 total = linkForGas.add(premium);
+    uint256 premium = PPB_BASE.add(s_config.paymentPremiumPPB);
+    uint256 total = weiForGas.mul(1e9).mul(premium).div(uint256(linkEth));
     require(total <= LINK_TOTAL_SUPPLY, "payment greater than all LINK");
     return uint96(total); // LINK_TOTAL_SUPPLY < UINT96_MAX
   }
 
-  /*
+  /**
    * @dev calls target address with exactly gasAmount gas and data as calldata
-   * or reverts
+   * or reverts if at least gasAmount gas is not available
    */
   function callWithExactGas(
     uint256 gasAmount,
@@ -710,7 +746,54 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
     return success;
   }
 
-  /*
+  /**
+   * @dev calls the Upkeep target with the performData param passed in by the
+   * keeper and the exact gas required by the Upkeep
+   */
+  function performUpkeepWithParams(
+    PerformParams memory params
+  )
+    private
+    nonReentrant()
+    validUpkeep(params.id)
+    returns (
+      bool success
+    )
+  {
+    require(s_keeperInfo[params.from].active, "only active keepers");
+    Upkeep memory upkeep = s_upkeep[params.id];
+    uint256 gasLimit = upkeep.executeGas;
+    (int256 gasWei, int256 linkEth) = getFeedData();
+    if (gasWei > int256(tx.gasprice)) {
+      gasWei = int256(tx.gasprice);
+    }
+    uint96 payment = calculatePaymentAmount(gasLimit, gasWei, linkEth);
+    require(upkeep.balance >= payment, "insufficient payment");
+    require(upkeep.lastKeeper != params.from, "keepers must take turns");
+
+    uint256  gasUsed = gasleft();
+    bytes memory callData = abi.encodeWithSelector(PERFORM_SELECTOR, params.performData);
+    success = callWithExactGas(gasLimit, upkeep.target, callData);
+    gasUsed = gasUsed - gasleft();
+
+    payment = calculatePaymentAmount(gasUsed, gasWei, linkEth);
+    upkeep.balance = upkeep.balance.sub(payment);
+    upkeep.lastKeeper = params.from;
+    s_upkeep[params.id] = upkeep;
+    uint96 newBalance = s_keeperInfo[params.from].balance.add(payment);
+    s_keeperInfo[params.from].balance = newBalance;
+
+    emit UpkeepPerformed(
+      params.id,
+      success,
+      params.from,
+      payment,
+      params.performData
+    );
+    return success;
+  }
+
+  /**
    * @dev ensures a upkeep is valid
    */
   function validateUpkeep(
@@ -725,7 +808,7 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
 
   // MODIFIERS
 
-  /*
+  /**
    * @dev ensures a upkeep is valid
    */
   modifier validUpkeep(
@@ -735,12 +818,14 @@ contract UpkeepRegistry is Owned, UpkeepBase, ReentrancyGuard {
     _;
   }
 
-  /*
-   * @dev ensures a keeper is permissioned to peform upkeep
+  /**
+   * @dev ensures that burns don't accidentally happen by sending to the zero
+   * address
    */
-  modifier validateKeeper()
-  {
-    require(s_keeperInfo[msg.sender].active, "only active keepers");
+  modifier validateRecipient(
+    address to
+  ) {
+    require(to != address(0), "cannot send to zero address");
     _;
   }
 

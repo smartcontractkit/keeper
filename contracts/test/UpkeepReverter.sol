@@ -1,12 +1,16 @@
-pragma solidity 0.6.12;
+// SPDX-License-Identifier: MIT
 
-import '../UpkeepCompatible.sol';
+pragma solidity 0.7.6;
 
-contract UpkeepReverter is UpkeepCompatible {
+import '../KeeperCompatible.sol';
 
-  function checkForUpkeep(bytes calldata data)
+contract UpkeepReverter is KeeperCompatible {
+
+  function checkUpkeep(bytes calldata data)
     public
+    view
     override
+    cannotExecute()
     returns (
       bool callable,
       bytes calldata executedata
@@ -20,6 +24,7 @@ contract UpkeepReverter is UpkeepCompatible {
     bytes calldata
   )
     external
+    pure
     override
   {
     require(false, "!working");
