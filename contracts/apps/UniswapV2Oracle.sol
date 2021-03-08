@@ -15,7 +15,6 @@ contract UniswapV2Oracle is KeeperCompatibleInterface, Owned {
     bool active;
     uint256 latestPrice0;
     uint256 latestPrice1;
-    uint8 index;
   }
 
   UniswapV2Factory private immutable uniswapV2Factory;
@@ -97,12 +96,11 @@ contract UniswapV2Oracle is KeeperCompatibleInterface, Owned {
 
     // Create the details if isn't already added
     require(s_latestPairDetails[newPair].active == false, "Pair already added");
-    PairDetails memory pairDetails = PairDetails(
-      true,
-      0,
-      0,
-      uint8(s_pairs.length)
-    );
+    PairDetails memory pairDetails = PairDetails({
+      active: true,
+      latestPrice0: 0,
+      latestPrice1: 0
+    });
 
     // Add to the pair details and pairs list
     s_latestPairDetails[newPair] = pairDetails;
@@ -111,6 +109,43 @@ contract UniswapV2Oracle is KeeperCompatibleInterface, Owned {
     emit PairAdded(newPair, tokenA, tokenB);
   }
 
+  /**
+   * @notice Remove a pair from upkeep
+   * @dev The index and pair must match
+   * @param index index of the pair in the getPairs() list
+   * @param pair Address of the pair
+   */
+  function removePair(
+    uint256 index,
+    address pair
+  )
+    external
+  {
+    // Check params are valid
+    require(s_latestPairDetails[pair].active, "Pair doesn't exist");
+    address[] memory pairsList = s_pairs;
+    require(pairsList[index] == pair, "Index - pair mismatch");
+
+    // Rearrange pairsList
+    delete pairsList[index];
+    uint256 lastItem = pairsList.length-1;
+    pairsList[index] = pairsList[lastItem];
+    assembly{
+      mstore(pairsList, lastItem)
+    }
+
+    // Set new state
+    s_pairs = pairsList;
+    s_latestPairDetails[pair].active = false;
+
+    // Emit event
+    emit PairRemoved(pair);
+  }
+
+  /**
+   * @notice Get all configured pairs
+   * @return pairs address[] 
+   */
   function getPairs()
     external
     view
@@ -121,12 +156,20 @@ contract UniswapV2Oracle is KeeperCompatibleInterface, Owned {
     return s_pairs;
   }
 
-  function removePair(
+  function getPairPrice(
     address pair
   )
     external
+    view
+    returns (
+      uint256 latestPrice0,
+      uint256 latestPrice1
+    )
   {
-    // TODO
+    PairDetails memory pairDetails = s_latestPairDetails[pair];
+    require(pairDetails.active == true, "Pair not valid");
+    latestPrice0 = pairDetails.latestPrice0;
+    latestPrice1 = pairDetails.latestPrice1;
   }
 
   /**
@@ -178,13 +221,21 @@ contract UniswapV2Oracle is KeeperCompatibleInterface, Owned {
   )
     private
   {
+    // Get pair details
     PairDetails memory pairDetails = s_latestPairDetails[pair];
+
+    // Set new values on memory pairDetails
     uint256 previousPrice0 = pairDetails.latestPrice0;
     uint256 previousPrice1 = pairDetails.latestPrice1;
-    uint256 latestPrice0 = UniswapV2Pair(pair).price0CumulativeLast();
-    uint256 latestPrice1 = UniswapV2Pair(pair).price1CumulativeLast();
-    s_latestPairDetails[pair].latestPrice0 = latestPrice0;
-    s_latestPairDetails[pair].latestPrice1 = latestPrice1;
+    UniswapV2Pair uniswapPair = UniswapV2Pair(pair);
+    uint256 latestPrice0 = uniswapPair.price0CumulativeLast();
+    uint256 latestPrice1 = uniswapPair.price1CumulativeLast();
+    pairDetails.latestPrice0 = latestPrice0;
+    pairDetails.latestPrice1 = latestPrice1;
+
+    // Set storage
+    s_latestPairDetails[pair] = pairDetails;
+
     emit PairPriceUpdated(pair,
       previousPrice0,
       previousPrice1,
