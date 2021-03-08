@@ -99,10 +99,11 @@ contract UniswapV2Oracle is KeeperCompatibleInterface, Owned {
 
     // Create the details if isn't already added
     require(s_latestPairDetails[newPair].active == false, "Pair already added");
+    UniswapV2Pair v2Pair = UniswapV2Pair(newPair);
     PairDetails memory pairDetails = PairDetails({
       active: true,
-      latestPrice0: 0,
-      latestPrice1: 0
+      latestPrice0: v2Pair.price0CumulativeLast(),
+      latestPrice1: v2Pair.price1CumulativeLast()
     });
 
     // Add to the pair details and pairs list
