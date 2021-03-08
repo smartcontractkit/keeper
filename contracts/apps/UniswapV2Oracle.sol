@@ -63,6 +63,8 @@ contract UniswapV2Oracle is KeeperCompatibleInterface, Owned {
     setUpkeepInterval(upkeepInterval);
   }
 
+  // CONFIGURATION FUNCTIONS
+
   /**
    * @notice Set the interval at which the prices of pairs should be updated
    * @param newInterval uint256
@@ -90,6 +92,7 @@ contract UniswapV2Oracle is KeeperCompatibleInterface, Owned {
     address tokenB
   )
     external
+    onlyOwner()
   {
     // Get pair address from uniswap
     address newPair = uniswapV2Factory.getPair(tokenA, tokenB);
@@ -120,6 +123,7 @@ contract UniswapV2Oracle is KeeperCompatibleInterface, Owned {
     address pair
   )
     external
+    onlyOwner()
   {
     // Check params are valid
     require(s_latestPairDetails[pair].active, "Pair doesn't exist");
@@ -142,35 +146,7 @@ contract UniswapV2Oracle is KeeperCompatibleInterface, Owned {
     emit PairRemoved(pair);
   }
 
-  /**
-   * @notice Get all configured pairs
-   * @return pairs address[] 
-   */
-  function getPairs()
-    external
-    view
-    returns (
-      address[] memory
-    )
-  {
-    return s_pairs;
-  }
-
-  function getPairPrice(
-    address pair
-  )
-    external
-    view
-    returns (
-      uint256 latestPrice0,
-      uint256 latestPrice1
-    )
-  {
-    PairDetails memory pairDetails = s_latestPairDetails[pair];
-    require(pairDetails.active == true, "Pair not valid");
-    latestPrice0 = pairDetails.latestPrice0;
-    latestPrice1 = pairDetails.latestPrice1;
-  }
+  // KEEPER FUNCTIONS
 
   /**
    * @notice Check if the contract needs upkeep. If not pairs are set,
@@ -272,5 +248,71 @@ contract UniswapV2Oracle is KeeperCompatibleInterface, Owned {
   {
     upkeepNeeded = (s_pairs.length > 0)
       && (block.timestamp >= s_latestUpkeepTimestamp.add(s_upkeepInterval));
+  }
+
+  // EXTERNAL GETTERS
+
+  /**
+   * @notice Get all configured pairs
+   * @return pairs address[] 
+   */
+  function getPairs()
+    external
+    view
+    returns (
+      address[] memory
+    )
+  {
+    return s_pairs;
+  }
+
+  /**
+   * @notice Get the latest observed prices of a pair
+   * @param pair address
+   * @return latestPrice0 uint256
+   * @return latestPrice1 uint256
+   */
+  function getPairPrice(
+    address pair
+  )
+    external
+    view
+    returns (
+      uint256 latestPrice0,
+      uint256 latestPrice1
+    )
+  {
+    PairDetails memory pairDetails = s_latestPairDetails[pair];
+    require(pairDetails.active == true, "Pair not valid");
+    latestPrice0 = pairDetails.latestPrice0;
+    latestPrice1 = pairDetails.latestPrice1;
+  }
+
+  /**
+   * @notice Get the uniswap v2 factory
+   * @return UniswapV2Factory address
+   */
+  function getUniswapV2Factory()
+    external
+    view
+    returns(
+      address
+    )
+  {
+    return address(uniswapV2Factory);
+  }
+
+  /**
+   * @notice Get the currently configured upkeep interval
+   * @return upkeep interval uint256
+   */
+  function getUpkeepInterval()
+    external
+    view
+    returns(
+      uint256
+    )
+  {
+    return s_upkeepInterval;
   }
 }
