@@ -9,7 +9,7 @@ const { expectEvent, expectRevert } = require('@openzeppelin/test-helpers')
 contract('UniswapV2Oracle', ([
   owner,
   uniDeployer,
-  stranger,
+  stranger1,
   tokenA,
   tokenB,
   tokenC,
@@ -20,20 +20,21 @@ contract('UniswapV2Oracle', ([
   const pair1Price1 = 2*10**18
   const pair2Price0 = 3*10**18
   const pair2Price1 = 4*10**18
+  const emptyBytes = '0x00'
 
-  let uniswapV2Oracle, factoryMock, pair1Address, pair2Address
+  let uniswapV2Oracle, factoryMock, pair1Address, pair2Address, pair1, pair2
 
   beforeEach(async () => {
     factoryMock = await UniswapV2FactoryMock.new(uniDeployer, {from:uniDeployer})
     // Add some pairs to the factory
     await factoryMock.createPair(tokenA, tokenB)
     pair1Address = await factoryMock.getPair(tokenA, tokenB)
-    const pair1 = await UniswapV2PairMock.at(pair1Address)
+    pair1 = await UniswapV2PairMock.at(pair1Address)
     await pair1.setPrice0(pair1Price0.toString())
     await pair1.setPrice1(pair1Price1.toString())
     await factoryMock.createPair(tokenC, tokenD)
     pair2Address = await factoryMock.getPair(tokenC, tokenD)
-    const pair2 = await UniswapV2PairMock.at(pair2Address)
+    pair2 = await UniswapV2PairMock.at(pair2Address)
     await pair2.setPrice0(pair2Price0.toString())
     await pair2.setPrice1(pair2Price1.toString())
     // Deploy UniswapV2Oracle
@@ -230,26 +231,79 @@ contract('UniswapV2Oracle', ([
   })
 
   describe('#checkUpkeep', () => {
-    
+    describe('returns false', () => {
+      it('has no active pairs', async () => {  
+        const {upkeepNeeded, _} = await uniswapV2Oracle.checkUpkeep(emptyBytes)
+        assert.equal(upkeepNeeded, false)
+      })
+
+      it('has not reached upkeep interval', async () => {
+        receipt = await uniswapV2Oracle.addPair(
+          tokenA,
+          tokenB,
+          {from:owner}
+        )
+        await uniswapV2Oracle.performUpkeep(emptyBytes)
+        const {upkeepNeeded, _} = await uniswapV2Oracle.checkUpkeep(emptyBytes)
+        assert.equal(upkeepNeeded, false)
+      })
+    })
+
+    it('returns true when upkeep needed', async () => {
+      receipt = await uniswapV2Oracle.addPair(
+        tokenA,
+        tokenB,
+        {from:owner}
+      )
+      const {upkeepNeeded, _} = await uniswapV2Oracle.checkUpkeep(emptyBytes)
+      assert.equal(upkeepNeeded, true)
+    })
   })
 
   describe('#performUpkeep', () => {
-    
-  })
+    const newPair1Price0 = 1111
+    const newPair1Price1 = 2222
+    const newPair2Price0 = 3333
+    const newPair2Price1 = 4444
+    let receipt, previousUpkeepTimestamp
+    beforeEach(async () => {
+      previousUpkeepTimestamp = await uniswapV2Oracle.getLatestUpkeepTimestamp()
+      receipt = await uniswapV2Oracle.addPair(
+        tokenA,
+        tokenB,
+        {from:owner}
+      )
+      receipt = await uniswapV2Oracle.addPair(
+        tokenC,
+        tokenD,
+        {from:owner}
+      )
+      // Update the prices on the pairs
+      await pair1.setPrice0(newPair1Price0)
+      await pair1.setPrice1(newPair1Price1)
+      await pair2.setPrice0(newPair2Price0)
+      await pair2.setPrice1(newPair2Price1)
 
-  describe('#getPairs', () => {
+      receipt = await uniswapV2Oracle.performUpkeep(emptyBytes)
+    })
 
-  })
+    it('updates the pair prices', async () => {
+      let {latestPrice0, latestPrice1} = await uniswapV2Oracle.getPairPrice(pair1Address)
+      assert.equal(latestPrice0.toString(), newPair1Price0.toString())
+      assert.equal(latestPrice1.toString(), newPair1Price1.toString())
+      response = await uniswapV2Oracle.getPairPrice(pair2Address)
+      latestPrice0 = response[0]
+      latestPrice1 = response[1]
+      assert.equal(latestPrice0.toString(), newPair2Price0.toString())
+      assert.equal(latestPrice1.toString(), newPair2Price1.toString())
+    })
 
-  describe('#getPairPrice', () => {
-    
-  })
+    it('emits events', async () => {
+      assert.equal(receipt.logs.length, 3)
+    })
 
-  describe('#getUniswapV2Factory', () => {
-    
-  })
-
-  describe('#getUpkeepInterval', () => {
-    
+    it('updates the latest upkeep timestamp', async () => {
+      assert.notEqual(await uniswapV2Oracle.getLatestUpkeepTimestamp(), previousUpkeepTimestamp)
+    })
   })
 })

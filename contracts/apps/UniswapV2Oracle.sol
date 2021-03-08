@@ -190,6 +190,24 @@ contract UniswapV2Oracle is KeeperCompatibleInterface, Owned {
   }
 
   /**
+   * @notice Check whether upkeep is needed
+   * @dev Possible outcomes:
+   *    - No pairs set:                                 false
+   *    - Some pairs set, but not enough time passed:   false
+   *    - Some pairs set, and enough time passed:       true
+   */
+  function _checkUpkeep()
+    private
+    view
+    returns (
+      bool upkeepNeeded
+    )
+  {
+    upkeepNeeded = (s_pairs.length > 0)
+      && (block.timestamp >= s_latestUpkeepTimestamp.add(s_upkeepInterval));
+  }
+
+  /**
    * @notice Retrieve and update the latest price of a pair.
    * @param pair The address of the pair contract
    */
@@ -233,25 +251,21 @@ contract UniswapV2Oracle is KeeperCompatibleInterface, Owned {
     emit LatestUpkeepTimestampUpdated(previousTimestamp, latestTimestamp);
   }
 
+  // EXTERNAL GETTERS
+
   /**
-   * @notice Check whether upkeep is needed
-   * @dev Possible outcomes:
-   *    - No pairs set:                                 false
-   *    - Some pairs set, but not enough time passed:   false
-   *    - Some pairs set, and enough time passed:       true
+   * @notice Get the latest upkeep timestamp.
+   * @return latestUpkeep uint256
    */
-  function _checkUpkeep()
-    private
+  function getLatestUpkeepTimestamp()
+    external
     view
     returns (
-      bool upkeepNeeded
+      uint256 latestUpkeep
     )
   {
-    upkeepNeeded = (s_pairs.length > 0)
-      && (block.timestamp >= s_latestUpkeepTimestamp.add(s_upkeepInterval));
+    latestUpkeep = s_latestUpkeepTimestamp;
   }
-
-  // EXTERNAL GETTERS
 
   /**
    * @notice Get all configured pairs
