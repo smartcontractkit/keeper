@@ -9,8 +9,7 @@ const { expectEvent, expectRevert } = require('@openzeppelin/test-helpers')
 contract('UniswapV2Oracle', ([
   owner,
   uniDeployer,
-  stranger1,
-  stranger2,
+  stranger,
   tokenA,
   tokenB,
   tokenC,
@@ -230,13 +229,27 @@ contract('UniswapV2Oracle', ([
     })
   })
 
-  describe('#getPairPrice', () => {
-    
-  })
   describe('#checkUpkeep', () => {
     
   })
+
   describe('#performUpkeep', () => {
+    
+  })
+
+  describe('#getPairs', () => {
+
+  })
+
+  describe('#getPairPrice', () => {
+    
+  })
+
+  describe('#getUniswapV2Factory', () => {
+    
+  })
+
+  describe('#getUpkeepInterval', () => {
     
   })
 })

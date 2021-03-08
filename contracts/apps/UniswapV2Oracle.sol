@@ -129,7 +129,7 @@ contract UniswapV2Oracle is KeeperCompatibleInterface, Owned {
     // Check params are valid
     require(s_latestPairDetails[pair].active, "Pair doesn't exist");
     address[] memory pairsList = s_pairs;
-    require(pairsList[index] == pair, "Index - pair mismatch");
+    require(index < pairsList.length && pairsList[index] == pair, "Invalid index");
 
     // Rearrange pairsList
     delete pairsList[index];
