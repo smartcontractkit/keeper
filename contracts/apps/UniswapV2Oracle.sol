@@ -178,7 +178,7 @@ contract UniswapV2Oracle is KeeperCompatibleInterface, Owned {
    */
   function performUpkeep(
     bytes calldata
-  ) 
+  )
     external
     override
   {
@@ -269,7 +269,7 @@ contract UniswapV2Oracle is KeeperCompatibleInterface, Owned {
 
   /**
    * @notice Get all configured pairs
-   * @return pairs address[] 
+   * @return pairs address[]
    */
   function getPairs()
     external
