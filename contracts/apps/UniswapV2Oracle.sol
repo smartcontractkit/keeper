@@ -255,16 +255,16 @@ contract UniswapV2Oracle is KeeperCompatibleInterface, Owned {
 
   /**
    * @notice Get the latest upkeep timestamp.
-   * @return latestUpkeep uint256
+   * @return latestUpkeepTimestamp uint256
    */
   function getLatestUpkeepTimestamp()
     external
     view
     returns (
-      uint256 latestUpkeep
+      uint256 latestUpkeepTimestamp
     )
   {
-    latestUpkeep = s_latestUpkeepTimestamp;
+    latestUpkeepTimestamp = s_latestUpkeepTimestamp;
   }
 
   /**
@@ -275,10 +275,10 @@ contract UniswapV2Oracle is KeeperCompatibleInterface, Owned {
     external
     view
     returns (
-      address[] memory
+      address[] memory pairs
     )
   {
-    return s_pairs;
+    pairs = s_pairs;
   }
 
   /**
