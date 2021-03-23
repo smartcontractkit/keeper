@@ -320,6 +320,23 @@ contract('KeeperRegistry', (accounts) => {
           await mock.setCanPerform(true)
         })
 
+        context('and the registry is paused', () => {
+          beforeEach(async () => {
+            await registry.pause({from: owner})
+          })
+
+          it('reverts', async () => {
+            await expectRevert(
+              registry.checkUpkeep.call(id, keeper1, {from: zeroAddress}),
+              'Pausable: paused'
+            )
+
+            await registry.unpause({from: owner})
+
+            await registry.checkUpkeep.call(id, keeper1, {from: zeroAddress})
+          })
+        })
+
         it('returns true with pricing info if the target can execute', async () => {
           const response = await registry.checkUpkeep.call(id, keeper1, {from: zeroAddress})
 
@@ -1003,6 +1020,44 @@ contract('KeeperRegistry', (accounts) => {
       const tx = await registry.recoverFunds({from: owner})
       const balanceAfter = await linkToken.balanceOf(registry.address)
       assert.isTrue(balanceBefore.eq(balanceAfter.add(sent)))
+    })
+  })
+
+  describe('#pause', () => {
+    it('reverts if called by a non-owner', async () => {
+      await expectRevert(
+        registry.pause({from: keeper1}),
+        "Only callable by owner"
+      )
+    })
+
+    it('marks the contract as paused', async () => {
+      assert.isFalse(await registry.paused())
+
+      await registry.pause({from: owner})
+
+      assert.isTrue(await registry.paused())
+    })
+  })
+
+  describe('#unpause', () => {
+    beforeEach(async () => {
+      await registry.pause({from: owner})
+    })
+
+    it('reverts if called by a non-owner', async () => {
+      await expectRevert(
+        registry.unpause({from: keeper1}),
+        "Only callable by owner"
+      )
+    })
+
+    it('marks the contract as paused', async () => {
+      assert.isTrue(await registry.paused())
+
+      await registry.unpause({from: owner})
+
+      assert.isFalse(await registry.paused())
     })
   })
 })
