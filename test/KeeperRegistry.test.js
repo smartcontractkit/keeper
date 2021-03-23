@@ -1052,7 +1052,7 @@ contract('KeeperRegistry', (accounts) => {
       )
     })
 
-    it('marks the contract as paused', async () => {
+    it('marks the contract as not paused', async () => {
       assert.isTrue(await registry.paused())
 
       await registry.unpause({from: owner})
