@@ -7,6 +7,7 @@ import "@chainlink/contracts/src/v0.7/interfaces/LinkTokenInterface.sol";
 import "@chainlink/contracts/src/v0.7/vendor/SafeMathChainlink.sol";
 import "./vendor/Owned.sol";
 import "./vendor/Address.sol";
+import "./vendor/Pausable.sol";
 import "./vendor/ReentrancyGuard.sol";
 import "./SafeMath96.sol";
 import "./KeeperBase.sol";
@@ -17,7 +18,13 @@ import "./KeeperRegistryInterface.sol";
   * @notice Registry for adding work for Chainlink Keepers to perform on client
   * contracts. Clients must support the Upkeep interface.
   */
-contract KeeperRegistry is Owned, KeeperBase, ReentrancyGuard, KeeperRegistryExecutableInterface {
+contract KeeperRegistry is
+  Owned,
+  KeeperBase,
+  ReentrancyGuard,
+  Pausable,
+  KeeperRegistryExecutableInterface
+{
   using Address for address;
   using SafeMathChainlink for uint256;
   using SafeMath96 for uint96;
@@ -230,6 +237,7 @@ contract KeeperRegistry is Owned, KeeperBase, ReentrancyGuard, KeeperRegistryExe
   )
     external
     override
+    whenNotPaused()
     cannotExecute()
     returns (
       bytes memory performData,
@@ -464,6 +472,28 @@ contract KeeperRegistry is Owned, KeeperBase, ReentrancyGuard, KeeperRegistryExe
     s_proposedPayee[keeper] = ZERO_ADDRESS;
 
     emit PayeeshipTransferred(keeper, past, msg.sender);
+  }
+
+  /**
+   * @notice signals to keepers that they should not perform upkeeps until the
+   * contract has been unpaused
+   */
+  function pause()
+    external
+    onlyOwner()
+  {
+    _pause();
+  }
+
+  /**
+   * @notice signals to keepers that they can perform upkeeps once again after
+   * having been paused
+   */
+  function unpause()
+    external
+    onlyOwner()
+  {
+    _unpause();
   }
 
 

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
+// github.com/OpenZeppelin/openzeppelin-contracts@fa64a1ced0b70ab89073d5d0b6e01b0778f7e7d6
 
-pragma solidity ^0.7.0;
+pragma solidity >=0.6.0 <0.8.0;
 
 /**
  * @dev Contract module that helps prevent reentrant calls to a function.
@@ -18,7 +19,7 @@ pragma solidity ^0.7.0;
  * to protect against it, check out our blog post
  * https://blog.openzeppelin.com/reentrancy-after-istanbul/[Reentrancy After Istanbul].
  */
-contract ReentrancyGuard {
+abstract contract ReentrancyGuard {
     // Booleans are more expensive than uint256 or any type that takes up a full
     // word because each write operation emits an extra SLOAD to first read the
     // slot's contents, replace the bits taken up by the boolean, and then write
@@ -35,7 +36,7 @@ contract ReentrancyGuard {
 
     uint256 private _status;
 
-    constructor () {
+    constructor () internal {
         _status = _NOT_ENTERED;
     }
 
