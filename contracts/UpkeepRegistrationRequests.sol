@@ -10,7 +10,7 @@ import "./vendor/Owned.sol";
 contract UpkeepRegistrationRequests is Owned {
     bytes4 private constant REGISTER_REQUEST_SELECTOR = 0x7633d239;
 
-    uint256 private minLINKWei;
+    uint256 private s_minLINKWei;
 
     address public immutable LINK_ADDRESS;
 
@@ -34,7 +34,7 @@ contract UpkeepRegistrationRequests is Owned {
 
     constructor(address LINKAddress, uint256 minimumLINKWei) {
         LINK_ADDRESS = LINKAddress;
-        minLINKWei = minimumLINKWei;
+        s_minLINKWei = minimumLINKWei;
     }
 
     /**
@@ -86,8 +86,8 @@ contract UpkeepRegistrationRequests is Owned {
      * @param minimumLINKWei minimum LINK required to send registration request
      */
     function setMinLINKWei(uint256 minimumLINKWei) external onlyOwner() {
-        emit MinLINKChanged(minLINKWei, minimumLINKWei);
-        minLINKWei = minimumLINKWei;
+        emit MinLINKChanged(s_minLINKWei, minimumLINKWei);
+        s_minLINKWei = minimumLINKWei;
     }
 
     /**
@@ -101,7 +101,7 @@ contract UpkeepRegistrationRequests is Owned {
         uint256 amount,
         bytes calldata data
     ) external onlyLINK() permittedFunctionsForLINK(data) {
-        require(amount >= minLINKWei, "Insufficient payment");
+        require(amount >= s_minLINKWei, "Insufficient payment");
         (bool success, ) = address(this).delegatecall(data); // calls register
         require(success, "Unable to create request");
     }
