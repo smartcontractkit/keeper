@@ -8,7 +8,7 @@ import "./vendor/Owned.sol";
  * @notice Contract to accept requests for upkeep registrations
  */
 contract UpkeepRegistrationRequests is Owned {
-    bytes4 private constant REGISTER_REQUEST_SELECTOR = 0x7633d239;
+    bytes4 private constant REGISTER_REQUEST_SELECTOR = this.request.selector;
 
     uint256 private s_minLINKWei;
 
@@ -22,14 +22,15 @@ contract UpkeepRegistrationRequests is Owned {
         bytes encryptedEmail,
         address indexed upkeepContract,
         uint32 gasLimit,
-        address indexed adminAddress,
-        bytes checkData
+        address adminAddress,
+        bytes checkData,
+        uint8 indexed source
     );
 
     event RegistrationApproved(
         bytes32 indexed hash,
-        string indexed displayName,
-        bytes32 indexed upkeepId
+        string displayName,
+        uint256 indexed upkeepId
     );
 
     constructor(address LINKAddress, uint256 minimumLINKWei) {
@@ -46,6 +47,7 @@ contract UpkeepRegistrationRequests is Owned {
      * performing upkeep
      * @param adminAddress address to cancel upkeep and withdraw remaining funds
      * @param checkData data passed to the contract when checking for upkeep
+     * @param source application sending this request
      */
     function register(
         string memory name,
@@ -53,7 +55,8 @@ contract UpkeepRegistrationRequests is Owned {
         address upkeepContract,
         uint32 gasLimit,
         address adminAddress,
-        bytes calldata checkData
+        bytes calldata checkData,
+        uint8 source
     ) external onlyLINK() {
         bytes32 hash = keccak256(msg.data);
         emit RegistrationRequested(
@@ -63,7 +66,8 @@ contract UpkeepRegistrationRequests is Owned {
             upkeepContract,
             gasLimit,
             adminAddress,
-            checkData
+            checkData,
+            source
         );
     }
 
@@ -76,7 +80,7 @@ contract UpkeepRegistrationRequests is Owned {
     function approved(
         bytes32 hash,
         string memory displayName,
-        bytes32 upkeepId
+        uint256 upkeepId
     ) external onlyOwner() {
         emit RegistrationApproved(hash, displayName, upkeepId);
     }
@@ -88,6 +92,13 @@ contract UpkeepRegistrationRequests is Owned {
     function setMinLINKWei(uint256 minimumLINKWei) external onlyOwner() {
         emit MinLINKChanged(s_minLINKWei, minimumLINKWei);
         s_minLINKWei = minimumLINKWei;
+    }
+
+    /**
+     * @notice read the minimum LINK required to send registration request
+     */
+    function getMinLINKWei() external view returns (uint256) {
+        return s_minLINKWei;
     }
 
     /**
