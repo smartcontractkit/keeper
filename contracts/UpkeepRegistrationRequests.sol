@@ -8,7 +8,7 @@ import "./vendor/Owned.sol";
  * @notice Contract to accept requests for upkeep registrations
  */
 contract UpkeepRegistrationRequests is Owned {
-    bytes4 private constant REGISTER_REQUEST_SELECTOR = this.request.selector;
+    bytes4 private constant REGISTER_REQUEST_SELECTOR = this.register.selector;
 
     uint256 private s_minLINKWei;
 
@@ -103,12 +103,11 @@ contract UpkeepRegistrationRequests is Owned {
 
     /**
      * @notice Called when LINK is sent to the contract via `transferAndCall`
-     * @param sender Address of the sender
      * @param amount Amount of LINK sent (specified in wei)
      * @param data Payload of the transaction
      */
     function onTokenTransfer(
-        address sender,
+        address /* sender */,
         uint256 amount,
         bytes calldata data
     ) external onlyLINK() permittedFunctionsForLINK(data) {
