@@ -8,7 +8,7 @@ import "./vendor/Owned.sol";
  * @notice Contract to accept requests for upkeep registrations
  */
 contract UpkeepRegistrationRequests is Owned {
-    bytes4 private constant REGISTER_REQUEST_SELECTOR = 0x153c010e;
+    bytes4 private constant REGISTER_REQUEST_SELECTOR = this.request.selector;
 
     uint256 private s_minLINKWei;
 
