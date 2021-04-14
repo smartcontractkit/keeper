@@ -30,6 +30,7 @@ contract KeeperRegistry is
   using SafeMath96 for uint96;
 
   address constant private ZERO_ADDRESS = address(0);
+  address constant private IGNORE_ADDRESS = 0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF;
   bytes4 constant private CHECK_SELECTOR = KeeperCompatibleInterface.checkUpkeep.selector;
   bytes4 constant private PERFORM_SELECTOR = KeeperCompatibleInterface.performUpkeep.selector;
   uint256 constant private CALL_GAS_MAX = 2_500_000;
@@ -561,8 +562,12 @@ contract KeeperRegistry is
     for (uint256 i = 0; i < keepers.length; i++) {
       address keeper = keepers[i];
       KeeperInfo storage s_keeper = s_keeperInfo[keeper];
-      address oldPayee = s_keeper.payee;
       address newPayee = payees[i];
+      if (newPayee == IGNORE_ADDRESS) {
+        s_keeper.active = true;
+        continue;
+      }
+      address oldPayee = s_keeper.payee;
       require(oldPayee == ZERO_ADDRESS || oldPayee == newPayee, "cannot change payee");
       require(!s_keeper.active, "cannot add keeper twice");
       s_keeper.payee = newPayee;
