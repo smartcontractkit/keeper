@@ -562,14 +562,15 @@ contract KeeperRegistry is
     for (uint256 i = 0; i < keepers.length; i++) {
       address keeper = keepers[i];
       KeeperInfo storage s_keeper = s_keeperInfo[keeper];
+      address oldPayee = s_keeper.payee;
       address newPayee = payees[i];
+      require(oldPayee == ZERO_ADDRESS || oldPayee == newPayee || newPayee == IGNORE_ADDRESS, "cannot change payee");
+      require(!s_keeper.active, "cannot add keeper twice");
+      // Do not activate if payee is IGNORE_ADDRESS
       if (newPayee == IGNORE_ADDRESS) {
-        s_keeper.active = true;
+        s_keeper.payee = ZERO_ADDRESS;
         continue;
       }
-      address oldPayee = s_keeper.payee;
-      require(oldPayee == ZERO_ADDRESS || oldPayee == newPayee, "cannot change payee");
-      require(!s_keeper.active, "cannot add keeper twice");
       s_keeper.payee = newPayee;
       s_keeper.active = true;
     }
