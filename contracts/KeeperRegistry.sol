@@ -568,7 +568,6 @@ contract KeeperRegistry is
       require(!s_keeper.active, "cannot add keeper twice");
       // Do not activate if payee is IGNORE_ADDRESS
       if (newPayee == IGNORE_ADDRESS) {
-        s_keeper.payee = ZERO_ADDRESS;
         continue;
       }
       s_keeper.payee = newPayee;
