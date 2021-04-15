@@ -118,7 +118,7 @@ contract('KeeperRegistry', (accounts) => {
       assert.isFalse(removed.active)
     })
 
-    it('removes keeper if the IGNORE_ADDRESS is used as payee', async () => {
+    it('does not change the payee if IGNORE_ADDRESS is used as payee', async () => {
       const oldKeepers = [keeper1, keeper2]
       const oldPayees = [payee1, payee2]
       await registry.setKeepers(oldKeepers, oldPayees, {from: owner})
@@ -130,7 +130,8 @@ contract('KeeperRegistry', (accounts) => {
       assert.deepEqual(newKeepers, await registry.getKeeperList())
 
       const ignored = await registry.getKeeperInfo(keeper2)
-      assert.equal(false, ignored.active)
+      assert.equal(payee2, ignored.payee)
+      assert.equal(true, ignored.active)
 
       expectEvent(receipt, 'KeepersUpdated', {
         keepers: newKeepers,
