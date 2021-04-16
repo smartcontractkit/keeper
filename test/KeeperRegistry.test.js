@@ -76,6 +76,7 @@ contract('KeeperRegistry', (accounts) => {
   })
 
   describe('#setKeepers', () => {
+    const IGNORE_ADDRESS = "0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF";
     it('reverts when not called by the owner', async () => {
       await expectRevert(
         registry.setKeepers([], [], {from: keeper1}),
@@ -115,6 +116,27 @@ contract('KeeperRegistry', (accounts) => {
       assert.isTrue(added.active)
       const removed = await registry.getKeeperInfo(keeper2)
       assert.isFalse(removed.active)
+    })
+
+    it('does not change the payee if IGNORE_ADDRESS is used as payee', async () => {
+      const oldKeepers = [keeper1, keeper2]
+      const oldPayees = [payee1, payee2]
+      await registry.setKeepers(oldKeepers, oldPayees, {from: owner})
+      assert.deepEqual(oldKeepers, await registry.getKeeperList())
+
+      const newKeepers = [keeper2, keeper3]
+      const newPayees = [IGNORE_ADDRESS, payee3]
+      const { receipt } = await registry.setKeepers(newKeepers, newPayees, {from: owner})
+      assert.deepEqual(newKeepers, await registry.getKeeperList())
+
+      const ignored = await registry.getKeeperInfo(keeper2)
+      assert.equal(payee2, ignored.payee)
+      assert.equal(true, ignored.active)
+
+      expectEvent(receipt, 'KeepersUpdated', {
+        keepers: newKeepers,
+        payees: newPayees
+      })
     })
 
     it('reverts if the owner changes the payee', async () => {
