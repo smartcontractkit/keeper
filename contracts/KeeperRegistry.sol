@@ -588,10 +588,12 @@ contract KeeperRegistry is
     address registrar
   )
     external
-    onlyOwner()
+    onlyOwnerOrRegistrar()
   {
-    emit RegistrarChanged(s_registrar, registrar);
+    address previous = s_registrar;
+    require(registrar != previous, "Same registrar");
     s_registrar = registrar;
+    emit RegistrarChanged(previous, registrar);
   }
 
   // GETTERS

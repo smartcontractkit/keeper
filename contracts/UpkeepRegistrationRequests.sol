@@ -104,7 +104,7 @@ contract UpkeepRegistrationRequests is Owned {
             {
                 //call register on keeper Registry
                 uint256 upkeepId = s_keeperRegistry.registerUpkeep(upkeepContract,gasLimit,adminAddress,checkData);
-                ++s_autoApprovedRegistrationsInCurrentWindow;
+                s_autoApprovedRegistrationsInCurrentWindow++;
 
                 //call approved function to emit approve event
                 approved(hash,name,upkeepId);
