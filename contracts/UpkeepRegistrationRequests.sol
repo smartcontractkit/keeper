@@ -3,6 +3,7 @@
 pragma solidity 0.7.6;
 
 import "./vendor/Owned.sol";
+import "./KeeperRegistryInterface.sol";
 
 /**
  * @notice Contract to accept requests for upkeep registrations
@@ -13,6 +14,24 @@ contract UpkeepRegistrationRequests is Owned {
     uint256 private s_minLINKWei;
 
     address public immutable LINK_ADDRESS;
+
+    //are registrations allowed to be auto approved
+    bool public s_autoApproveRegistrations;
+
+    //auto-approve registration window size in number of blocks
+    uint256 public s_autoApproveWindowSizeInBlocks;
+
+    //number of registrations allowed to auto-approve per window
+    uint256 public s_autoApproveAllowedPerWindow;
+
+    //block number when current registration window started
+    uint256 public s_currentAutoApproveWindowStart;
+
+    //number of registrations auto approved in current window
+    uint256 public s_autoApprovedRegistrationsInCurrentWindow;
+
+
+    KeeperRegistryBaseInterface public s_keeperRegistry;
 
     event MinLINKChanged(uint256 from, uint256 to);
 
@@ -69,6 +88,28 @@ contract UpkeepRegistrationRequests is Owned {
             checkData,
             source
         );
+
+        // if auto approve is true send registration request to the Keeper Registry contract
+        if(s_autoApproveRegistrations)
+        {
+            //reset auto approve window if passed end of current window
+            if((block.number-s_currentAutoApproveWindowStart) >= s_autoApproveWindowSizeInBlocks)
+            {
+                s_currentAutoApproveWindowStart = block.number;
+                s_autoApprovedRegistrationsInCurrentWindow = 0;
+            }
+
+            //auto register only if max number of allowed registrations are not already completed for this auto approve window
+            if(s_autoApprovedRegistrationsInCurrentWindow < s_autoApproveAllowedPerWindow)
+            {
+                //call register on keeper Registry
+                uint256 upkeepId = s_keeperRegistry.registerUpkeep(upkeepContract,gasLimit,adminAddress,checkData);
+                ++s_autoApprovedRegistrationsInCurrentWindow;
+
+                //call approved function to emit approve event
+                approved(hash,name,upkeepId);
+            }
+        }
     }
 
     /**
@@ -81,7 +122,7 @@ contract UpkeepRegistrationRequests is Owned {
         bytes32 hash,
         string memory displayName,
         uint256 upkeepId
-    ) external onlyOwner() {
+    ) public onlyOwner() {
         emit RegistrationApproved(hash, displayName, upkeepId);
     }
 
@@ -99,6 +140,25 @@ contract UpkeepRegistrationRequests is Owned {
      */
     function getMinLINKWei() external view returns (uint256) {
         return s_minLINKWei;
+    }
+
+    /**
+     * @notice owner calls this function to set if registration requests should be sent directly to the Keeper Registry
+     * @param autoApproveRegistrations setting for autoapprove registrations
+     * @param registrationsWindowSizeInBlocks window size defined in number of blocks
+     * @param registrationsCountPerWindow number of registrations that can be auto approved in above window
+     * @param keeperRegistry new keeper registry address
+     */
+    function setRegistrationConfig(
+        bool autoApproveRegistrations,
+        uint256 registrationsWindowSizeInBlocks,
+        uint256 registrationsCountPerWindow,
+        address keeperRegistry
+    ) external onlyOwner() {
+        s_autoApproveRegistrations = autoApproveRegistrations;
+        s_autoApproveWindowSizeInBlocks = registrationsWindowSizeInBlocks;
+        s_autoApproveAllowedPerWindow = registrationsCountPerWindow;
+        s_keeperRegistry = KeeperRegistryBaseInterface(keeperRegistry);
     }
 
     /**
