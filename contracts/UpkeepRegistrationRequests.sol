@@ -9,6 +9,7 @@ import "./KeeperRegistryInterface.sol";
  * @notice Contract to accept requests for upkeep registrations
  */
 contract UpkeepRegistrationRequests is Owned {
+
     bytes4 private constant REGISTER_REQUEST_SELECTOR = this.register.selector;
 
     uint256 private s_minLINKWei;
@@ -29,7 +30,6 @@ contract UpkeepRegistrationRequests is Owned {
 
     //number of registrations auto approved in current window
     uint256 public s_autoApprovedRegistrationsInCurrentWindow;
-
 
     KeeperRegistryBaseInterface public s_keeperRegistry;
 
@@ -90,30 +90,39 @@ contract UpkeepRegistrationRequests is Owned {
         );
 
         // if auto approve is true send registration request to the Keeper Registry contract
-        if(s_autoApproveRegistrations)
-        {
+        if (s_autoApproveRegistrations) {
             //reset auto approve window if passed end of current window
-            if((block.number-s_currentAutoApproveWindowStart) >= s_autoApproveWindowSizeInBlocks)
-            {
+            if (
+                (block.number - s_currentAutoApproveWindowStart) >=
+                s_autoApproveWindowSizeInBlocks
+            ) {
                 s_currentAutoApproveWindowStart = block.number;
                 s_autoApprovedRegistrationsInCurrentWindow = 0;
             }
 
             //auto register only if max number of allowed registrations are not already completed for this auto approve window
-            if(s_autoApprovedRegistrationsInCurrentWindow < s_autoApproveAllowedPerWindow)
-            {
+            if (
+                s_autoApprovedRegistrationsInCurrentWindow <
+                s_autoApproveAllowedPerWindow
+            ) {
                 //call register on keeper Registry
-                uint256 upkeepId = s_keeperRegistry.registerUpkeep(upkeepContract,gasLimit,adminAddress,checkData);
+                uint256 upkeepId =
+                    s_keeperRegistry.registerUpkeep(
+                        upkeepContract,
+                        gasLimit,
+                        adminAddress,
+                        checkData
+                    );
                 s_autoApprovedRegistrationsInCurrentWindow++;
 
-                //call approved function to emit approve event
-                approved(hash,name,upkeepId);
+                // emit approve event
+                emit RegistrationApproved(hash, name, upkeepId);
             }
         }
     }
 
     /**
-     * @notice owner calls this function after registering upkeep on the Registry contract
+     * @notice this function is called after registering upkeep on the Registry contract
      * @param hash hash of the message data of the registration request that is being approved
      * @param displayName display name for the upkeep being approved
      * @param upkeepId id of the upkeep that has been registered
@@ -167,7 +176,7 @@ contract UpkeepRegistrationRequests is Owned {
      * @param data Payload of the transaction
      */
     function onTokenTransfer(
-        address /* sender */,
+        address, /* sender */
         uint256 amount,
         bytes calldata data
     ) external onlyLINK() permittedFunctionsForLINK(data) {
