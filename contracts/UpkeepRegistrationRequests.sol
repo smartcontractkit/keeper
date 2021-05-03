@@ -16,7 +16,6 @@ import "./KeeperRegistryInterface.sol";
  * they can just listen to `RegistrationRequested` & `RegistrationApproved` events and know the status on registrations.
  */
 contract UpkeepRegistrationRequests is Owned {
-
     bytes4 private constant REGISTER_REQUEST_SELECTOR = this.register.selector;
 
     uint256 private s_minLINKWei;
@@ -24,19 +23,19 @@ contract UpkeepRegistrationRequests is Owned {
     address public immutable LINK_ADDRESS;
 
     //are registrations allowed to be auto approved
-    bool public s_autoApproveRegistrations;
+    bool private s_autoApproveRegistrations;
 
     //auto-approve registration window size in number of blocks
-    uint256 public s_autoApproveWindowSizeInBlocks;
+    uint256 private s_autoApproveWindowSizeInBlocks;
 
     //number of registrations allowed to auto-approve per window
-    uint256 public s_autoApproveAllowedPerWindow;
+    uint256 private s_autoApproveAllowedPerWindow;
 
     //block number when current registration window started
-    uint256 public s_currentAutoApproveWindowStart;
+    uint256 private s_currentAutoApproveWindowStart;
 
     //number of registrations auto approved in current window
-    uint256 public s_autoApprovedRegistrationsInCurrentWindow;
+    uint256 private s_autoApprovedRegistrationsInCurrentWindow;
 
     KeeperRegistryBaseInterface public s_keeperRegistry;
 
@@ -161,20 +160,45 @@ contract UpkeepRegistrationRequests is Owned {
     /**
      * @notice owner calls this function to set if registration requests should be sent directly to the Keeper Registry
      * @param autoApproveRegistrations setting for autoapprove registrations
-     * @param registrationsWindowSizeInBlocks window size defined in number of blocks
-     * @param registrationsCountPerWindow number of registrations that can be auto approved in above window
+     * @param autoApproveWindowSizeInBlocks window size defined in number of blocks
+     * @param autoApproveAllowedPerWindow number of registrations that can be auto approved in above window
      * @param keeperRegistry new keeper registry address
      */
     function setRegistrationConfig(
         bool autoApproveRegistrations,
-        uint256 registrationsWindowSizeInBlocks,
-        uint256 registrationsCountPerWindow,
+        uint256 autoApproveWindowSizeInBlocks,
+        uint256 autoApproveAllowedPerWindow,
         address keeperRegistry
     ) external onlyOwner() {
         s_autoApproveRegistrations = autoApproveRegistrations;
-        s_autoApproveWindowSizeInBlocks = registrationsWindowSizeInBlocks;
-        s_autoApproveAllowedPerWindow = registrationsCountPerWindow;
+        s_autoApproveWindowSizeInBlocks = autoApproveWindowSizeInBlocks;
+        s_autoApproveAllowedPerWindow = autoApproveAllowedPerWindow;
         s_keeperRegistry = KeeperRegistryBaseInterface(keeperRegistry);
+    }
+
+    /**
+     * @notice read the current registration configuration
+     */
+    function getRegistrationConfig()
+        external
+        view
+        returns (
+            bool autoApproveRegistrations,
+            uint256 autoApproveWindowSizeInBlocks,
+            uint256 autoApproveAllowedPerWindow,
+            address keeperRegistry,
+            uint256 currentAutoApproveWindowStart,
+            uint256 autoApprovedRegistrationsInCurrentWindow
+        )
+    {
+        return (
+            s_autoApproveRegistrations,
+            s_autoApproveWindowSizeInBlocks,
+            s_autoApproveAllowedPerWindow,
+            address(s_keeperRegistry),
+            s_currentAutoApproveWindowStart,
+            s_autoApprovedRegistrationsInCurrentWindow
+        );
     }
 
     /**

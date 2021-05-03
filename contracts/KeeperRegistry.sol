@@ -57,7 +57,7 @@ contract KeeperRegistry is
   AggregatorV3Interface public immutable LINK_ETH_FEED;
   AggregatorV3Interface public immutable FAST_GAS_FEED;
 
-  address public s_registrar;
+  address private s_registrar;
 
   struct Upkeep {
     address target;
@@ -669,6 +669,19 @@ contract KeeperRegistry is
     )
   {
     return s_keeperList;
+  }
+
+ /**
+   * @notice read the current registrar
+   */
+  function getRegistrar()
+    external
+    view
+    returns (
+      address
+    )
+  {
+    return s_registrar;
   }
 
   /**
