@@ -91,7 +91,7 @@ contract("UpkeepRegistrationRequests", (accounts) => {
       );
     });
 
-    it("Auto Approve ON - registers an upkeep on KeeperRegistry instantly and emits appropriate both RegistrationRequested and RegistrationApproved events", async () => {
+    it("Auto Approve ON - registers an upkeep on KeeperRegistry instantly and emits both RegistrationRequested and RegistrationApproved events", async () => {
       //get current upkeep count
       const upkeepCount = await registry.getUpkeepCount();
 
