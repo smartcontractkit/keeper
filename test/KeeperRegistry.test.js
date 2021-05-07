@@ -171,7 +171,7 @@ contract('KeeperRegistry', (accounts) => {
           emptyBytes,
           { from: keeper1 }
         ),
-        'Only callable by owner'
+        'Only callable by owner or registrar'
       )
     })
 

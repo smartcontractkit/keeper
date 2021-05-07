@@ -22,22 +22,16 @@ contract UpkeepRegistrationRequests is Owned {
 
     address public immutable LINK_ADDRESS;
 
-    //are registrations allowed to be auto approved
-    bool private s_autoApproveRegistrations;
+    struct AutoApprovedConfig {
+        bool enabled;
+        uint16 allowedPerWindow;
+        uint32 windowSizeInBlocks;
+        uint32 windowStart;
+        uint16 approvedInCurrentWindow;
+        KeeperRegistryBaseInterface keeperRegistry;
+    }
 
-    //auto-approve registration window size in number of blocks
-    uint256 private s_autoApproveWindowSizeInBlocks;
-
-    //number of registrations allowed to auto-approve per window
-    uint256 private s_autoApproveAllowedPerWindow;
-
-    //block number when current registration window started
-    uint256 private s_currentAutoApproveWindowStart;
-
-    //number of registrations auto approved in current window
-    uint256 private s_autoApprovedRegistrationsInCurrentWindow;
-
-    KeeperRegistryBaseInterface public s_keeperRegistry;
+    AutoApprovedConfig private s_config;
 
     event MinLINKChanged(uint256 from, uint256 to);
 
@@ -84,6 +78,7 @@ contract UpkeepRegistrationRequests is Owned {
         uint8 source
     ) external onlyLINK() {
         bytes32 hash = keccak256(msg.data);
+
         emit RegistrationRequested(
             hash,
             name,
@@ -96,34 +91,55 @@ contract UpkeepRegistrationRequests is Owned {
         );
 
         // if auto approve is true send registration request to the Keeper Registry contract
-        if (s_autoApproveRegistrations) {
-            //reset auto approve window if passed end of current window
-            if (
-                (block.number - s_currentAutoApproveWindowStart) >=
-                s_autoApproveWindowSizeInBlocks
-            ) {
-                s_currentAutoApproveWindowStart = block.number;
-                s_autoApprovedRegistrationsInCurrentWindow = 0;
-            }
+        if (s_config.enabled) {
+            resetWindowIfRequired();
 
-            //auto register only if max number of allowed registrations are not already completed for this auto approve window
-            if (
-                s_autoApprovedRegistrationsInCurrentWindow <
-                s_autoApproveAllowedPerWindow
-            ) {
-                //call register on keeper Registry
-                uint256 upkeepId =
-                    s_keeperRegistry.registerUpkeep(
-                        upkeepContract,
-                        gasLimit,
-                        adminAddress,
-                        checkData
-                    );
-                s_autoApprovedRegistrationsInCurrentWindow++;
+            registerWithinThreshold(
+                name,
+                upkeepContract,
+                gasLimit,
+                adminAddress,
+                checkData,
+                hash
+            );
+        }
+    }
 
-                // emit approve event
-                emit RegistrationApproved(hash, name, upkeepId);
-            }
+    /**
+     * @dev reset auto approve window if passed end of current window
+     */
+    function resetWindowIfRequired() private {
+        uint32 blocksPassed = uint32(block.number - s_config.windowStart);
+        if ((blocksPassed) >= s_config.windowSizeInBlocks) {
+            s_config.windowStart = uint32(block.number);
+            s_config.approvedInCurrentWindow = 0;
+        }
+    }
+
+    /**
+     * @dev auto register only if max number of allowed registrations are not already completed for this auto approve window
+     */
+    function registerWithinThreshold(
+        string memory name,
+        address upkeepContract,
+        uint32 gasLimit,
+        address adminAddress,
+        bytes calldata checkData,
+        bytes32 hash
+    ) private {
+        if (s_config.approvedInCurrentWindow < s_config.allowedPerWindow) {
+            //call register on keeper Registry
+            uint256 upkeepId =
+                s_config.keeperRegistry.registerUpkeep(
+                    upkeepContract,
+                    gasLimit,
+                    adminAddress,
+                    checkData
+                );
+            s_config.approvedInCurrentWindow++;
+
+            // emit approve event
+            emit RegistrationApproved(hash, name, upkeepId);
         }
     }
 
@@ -159,21 +175,25 @@ contract UpkeepRegistrationRequests is Owned {
 
     /**
      * @notice owner calls this function to set if registration requests should be sent directly to the Keeper Registry
-     * @param autoApproveRegistrations setting for autoapprove registrations
-     * @param autoApproveWindowSizeInBlocks window size defined in number of blocks
-     * @param autoApproveAllowedPerWindow number of registrations that can be auto approved in above window
+     * @param enabled setting for autoapprove registrations
+     * @param windowSizeInBlocks window size defined in number of blocks
+     * @param allowedPerWindow number of registrations that can be auto approved in above window
      * @param keeperRegistry new keeper registry address
      */
     function setRegistrationConfig(
-        bool autoApproveRegistrations,
-        uint256 autoApproveWindowSizeInBlocks,
-        uint256 autoApproveAllowedPerWindow,
+        bool enabled,
+        uint32 windowSizeInBlocks,
+        uint16 allowedPerWindow,
         address keeperRegistry
     ) external onlyOwner() {
-        s_autoApproveRegistrations = autoApproveRegistrations;
-        s_autoApproveWindowSizeInBlocks = autoApproveWindowSizeInBlocks;
-        s_autoApproveAllowedPerWindow = autoApproveAllowedPerWindow;
-        s_keeperRegistry = KeeperRegistryBaseInterface(keeperRegistry);
+        s_config = AutoApprovedConfig({
+            enabled: enabled,
+            allowedPerWindow: allowedPerWindow,
+            windowSizeInBlocks: windowSizeInBlocks,
+            windowStart: 0,
+            approvedInCurrentWindow: 0,
+            keeperRegistry: KeeperRegistryBaseInterface(keeperRegistry)
+        });
     }
 
     /**
@@ -183,21 +203,22 @@ contract UpkeepRegistrationRequests is Owned {
         external
         view
         returns (
-            bool autoApproveRegistrations,
-            uint256 autoApproveWindowSizeInBlocks,
-            uint256 autoApproveAllowedPerWindow,
+            bool enabled,
+            uint32 windowSizeInBlocks,
+            uint16 allowedPerWindow,
             address keeperRegistry,
-            uint256 currentAutoApproveWindowStart,
-            uint256 autoApprovedRegistrationsInCurrentWindow
+            uint32 windowStart,
+            uint16 approvedInCurrentWindow
         )
     {
+        AutoApprovedConfig memory config = s_config;
         return (
-            s_autoApproveRegistrations,
-            s_autoApproveWindowSizeInBlocks,
-            s_autoApproveAllowedPerWindow,
-            address(s_keeperRegistry),
-            s_currentAutoApproveWindowStart,
-            s_autoApprovedRegistrationsInCurrentWindow
+            config.enabled,
+            config.windowSizeInBlocks,
+            config.allowedPerWindow,
+            address(config.keeperRegistry),
+            config.windowStart,
+            config.approvedInCurrentWindow
         );
     }
 
