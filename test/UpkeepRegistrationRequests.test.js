@@ -95,7 +95,7 @@ contract("UpkeepRegistrationRequests", (accounts) => {
       //get current upkeep count
       const upkeepCount = await registry.getUpkeepCount();
 
-      //set auto approve ON
+      //set auto approve ON with high threshold limits
       await registrar.setRegistrationConfig(
         true,
         window_small,
@@ -160,7 +160,7 @@ contract("UpkeepRegistrationRequests", (accounts) => {
       //get upkeep count before attempting registration
       const beforeCount = await registry.getUpkeepCount();
 
-      //set auto approve OFF
+      //set auto approve OFF, threshold limits dont matter in this case
       await registrar.setRegistrationConfig(
         false,
         window_small,
@@ -223,7 +223,7 @@ contract("UpkeepRegistrationRequests", (accounts) => {
       //get upkeep count before attempting registration
       const beforeCount = await registry.getUpkeepCount();
 
-      //set auto approve on
+      //set auto approve on, with low threshold limits
       await registrar.setRegistrationConfig(
         true,
         window_big,
