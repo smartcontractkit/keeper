@@ -193,7 +193,7 @@ contract("UpkeepRegistrationRequests", (accounts) => {
       //confirm that a new upkeep has NOT been registered and upkeep count is still the same
       assert.deepEqual(beforeCount, afterCount);
 
-      //confirm if RegistrationRequested and RegistrationApproved event are received
+      //confirm that only RegistrationRequested event is amitted and RegistrationApproved event is not 
       let event_RegistrationRequested = receipt.rawLogs.some((l) => {
         return (
           l.topics[0] ==
@@ -264,8 +264,9 @@ contract("UpkeepRegistrationRequests", (accounts) => {
         );
       }
       const afterCount = await registry.getUpkeepCount();
-      //newly registered upkeeps should not be more than the threshold set for auto approval
-      assert(afterCount.toNumber() - beforeCount.toNumber() == threshold_small);
+      //count of newly registered upkeeps should be equal to the threshold set for auto approval
+      const newRegistrationsCount = afterCount.toNumber() - beforeCount.toNumber();
+      assert(newRegistrationsCount == threshold_small,"Registrations beyond threshold");
     });
   });
 });
