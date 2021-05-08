@@ -26,12 +26,12 @@ contract UpkeepRegistrationRequests is Owned {
         bool enabled;
         uint16 allowedPerWindow;
         uint32 windowSizeInBlocks;
-        uint32 windowStart;
+        uint64 windowStart;
         uint16 approvedInCurrentWindow;
-        KeeperRegistryBaseInterface keeperRegistry;
     }
 
     AutoApprovedConfig private s_config;
+    KeeperRegistryBaseInterface private s_keeperRegistry;
 
     event MinLINKChanged(uint256 from, uint256 to);
 
@@ -90,9 +90,11 @@ contract UpkeepRegistrationRequests is Owned {
             source
         );
 
+        AutoApprovedConfig memory config = s_config;
+
         // if auto approve is true send registration request to the Keeper Registry contract
-        if (s_config.enabled) {
-            resetWindowIfRequired();
+        if (config.enabled) {
+            resetWindowIfRequired(config);
 
             registerWithinThreshold(
                 name,
@@ -100,7 +102,8 @@ contract UpkeepRegistrationRequests is Owned {
                 gasLimit,
                 adminAddress,
                 checkData,
-                hash
+                hash,
+                config
             );
         }
     }
@@ -108,10 +111,10 @@ contract UpkeepRegistrationRequests is Owned {
     /**
      * @dev reset auto approve window if passed end of current window
      */
-    function resetWindowIfRequired() private {
-        uint32 blocksPassed = uint32(block.number - s_config.windowStart);
-        if ((blocksPassed) >= s_config.windowSizeInBlocks) {
-            s_config.windowStart = uint32(block.number);
+    function resetWindowIfRequired(AutoApprovedConfig memory config) private {
+        uint64 blocksPassed = uint64(block.number - config.windowStart);
+        if ((blocksPassed) >= config.windowSizeInBlocks) {
+            s_config.windowStart = uint64(block.number);
             s_config.approvedInCurrentWindow = 0;
         }
     }
@@ -125,12 +128,13 @@ contract UpkeepRegistrationRequests is Owned {
         uint32 gasLimit,
         address adminAddress,
         bytes calldata checkData,
-        bytes32 hash
+        bytes32 hash,
+        AutoApprovedConfig memory config
     ) private {
-        if (s_config.approvedInCurrentWindow < s_config.allowedPerWindow) {
+        if (config.approvedInCurrentWindow < config.allowedPerWindow) {
             //call register on keeper Registry
             uint256 upkeepId =
-                s_config.keeperRegistry.registerUpkeep(
+                s_keeperRegistry.registerUpkeep(
                     upkeepContract,
                     gasLimit,
                     adminAddress,
@@ -149,7 +153,7 @@ contract UpkeepRegistrationRequests is Owned {
      * @param displayName display name for the upkeep being approved
      * @param upkeepId id of the upkeep that has been registered
      */
-    function approved(
+    function approve(
         bytes32 hash,
         string memory displayName,
         uint256 upkeepId
@@ -191,9 +195,9 @@ contract UpkeepRegistrationRequests is Owned {
             allowedPerWindow: allowedPerWindow,
             windowSizeInBlocks: windowSizeInBlocks,
             windowStart: 0,
-            approvedInCurrentWindow: 0,
-            keeperRegistry: KeeperRegistryBaseInterface(keeperRegistry)
+            approvedInCurrentWindow: 0
         });
+        s_keeperRegistry = KeeperRegistryBaseInterface(keeperRegistry);
     }
 
     /**
@@ -207,7 +211,7 @@ contract UpkeepRegistrationRequests is Owned {
             uint32 windowSizeInBlocks,
             uint16 allowedPerWindow,
             address keeperRegistry,
-            uint32 windowStart,
+            uint64 windowStart,
             uint16 approvedInCurrentWindow
         )
     {
@@ -216,7 +220,7 @@ contract UpkeepRegistrationRequests is Owned {
             config.enabled,
             config.windowSizeInBlocks,
             config.allowedPerWindow,
-            address(config.keeperRegistry),
+            address(s_keeperRegistry),
             config.windowStart,
             config.approvedInCurrentWindow
         );
