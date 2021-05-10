@@ -57,6 +57,8 @@ contract UpkeepRegistrationRequests is Owned {
         s_minLINKJuels = minimumLINKJuels;
     }
 
+    //EXTERNAL
+
     /**
      * @notice register can only be called through transferAndCall on LINK contract
      * @param name name of the upkeep to be registered
@@ -94,9 +96,9 @@ contract UpkeepRegistrationRequests is Owned {
 
         // if auto approve is true send registration request to the Keeper Registry contract
         if (config.enabled) {
-            resetWindowIfRequired(config);
+            _resetWindowIfRequired(config);
 
-            registerWithinThreshold(
+            _registerWithinThreshold(
                 name,
                 upkeepContract,
                 gasLimit,
@@ -105,47 +107,6 @@ contract UpkeepRegistrationRequests is Owned {
                 hash,
                 config
             );
-        }
-    }
-
-    /**
-     * @dev reset auto approve window if passed end of current window
-     */
-    function resetWindowIfRequired(AutoApprovedConfig memory config) private {
-        uint64 blocksPassed = uint64(block.number - config.windowStart);
-        if ((blocksPassed) >= config.windowSizeInBlocks) {
-            config.windowStart = uint64(block.number);
-            config.approvedInCurrentWindow = 0;
-            s_config = config;
-        }
-    }
-
-    /**
-     * @dev auto register only if max number of allowed registrations are not already completed for this auto approve window
-     */
-    function registerWithinThreshold(
-        string memory name,
-        address upkeepContract,
-        uint32 gasLimit,
-        address adminAddress,
-        bytes calldata checkData,
-        bytes32 hash,
-        AutoApprovedConfig memory config
-    ) private {
-        if (config.approvedInCurrentWindow < config.allowedPerWindow) {
-            //call register on keeper Registry
-            uint256 upkeepId =
-                s_keeperRegistry.registerUpkeep(
-                    upkeepContract,
-                    gasLimit,
-                    adminAddress,
-                    checkData
-                );
-            config.approvedInCurrentWindow++;
-            s_config = config;
-
-            // emit approve event
-            emit RegistrationApproved(hash, name, upkeepId);
         }
     }
 
@@ -159,7 +120,7 @@ contract UpkeepRegistrationRequests is Owned {
         bytes32 hash,
         string memory displayName,
         uint256 upkeepId
-    ) public onlyOwner() {
+    ) external onlyOwner() {
         emit RegistrationApproved(hash, displayName, upkeepId);
     }
 
@@ -242,6 +203,51 @@ contract UpkeepRegistrationRequests is Owned {
         (bool success, ) = address(this).delegatecall(data); // calls register
         require(success, "Unable to create request");
     }
+
+    //PRIVATE
+
+    /**
+     * @dev reset auto approve window if passed end of current window
+     */
+    function _resetWindowIfRequired(AutoApprovedConfig memory config) private {
+        uint64 blocksPassed = uint64(block.number - config.windowStart);
+        if ((blocksPassed) >= config.windowSizeInBlocks) {
+            config.windowStart = uint64(block.number);
+            config.approvedInCurrentWindow = 0;
+            s_config = config;
+        }
+    }
+
+    /**
+     * @dev auto register only if max number of allowed registrations are not already completed for this auto approve window
+     */
+    function _registerWithinThreshold(
+        string memory name,
+        address upkeepContract,
+        uint32 gasLimit,
+        address adminAddress,
+        bytes calldata checkData,
+        bytes32 hash,
+        AutoApprovedConfig memory config
+    ) private {
+        if (config.approvedInCurrentWindow < config.allowedPerWindow) {
+            //call register on keeper Registry
+            uint256 upkeepId =
+                s_keeperRegistry.registerUpkeep(
+                    upkeepContract,
+                    gasLimit,
+                    adminAddress,
+                    checkData
+                );
+            config.approvedInCurrentWindow++;
+            s_config = config;
+
+            // emit approve event
+            emit RegistrationApproved(hash, name, upkeepId);
+        }
+    }
+
+    //MODIFIERS
 
     /**
      * @dev Reverts if not sent from the LINK token
