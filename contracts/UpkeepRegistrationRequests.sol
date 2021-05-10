@@ -18,7 +18,7 @@ import "./KeeperRegistryInterface.sol";
 contract UpkeepRegistrationRequests is Owned {
     bytes4 private constant REGISTER_REQUEST_SELECTOR = this.register.selector;
 
-    uint256 private s_minLINKWei;
+    uint256 private s_minLINKJuels;
 
     address public immutable LINK_ADDRESS;
 
@@ -52,15 +52,15 @@ contract UpkeepRegistrationRequests is Owned {
         uint256 indexed upkeepId
     );
 
-    constructor(address LINKAddress, uint256 minimumLINKWei) {
+    constructor(address LINKAddress, uint256 minimumLINKJuels) {
         LINK_ADDRESS = LINKAddress;
-        s_minLINKWei = minimumLINKWei;
+        s_minLINKJuels = minimumLINKJuels;
     }
 
     /**
      * @notice register can only be called through transferAndCall on LINK contract
      * @param name name of the upkeep to be registered
-     * @param encryptedEmail Amount of LINK sent (specified in wei)
+     * @param encryptedEmail Amount of LINK sent (specified in Juels)
      * @param upkeepContract address to peform upkeep on
      * @param gasLimit amount of gas to provide the target contract when
      * performing upkeep
@@ -165,18 +165,18 @@ contract UpkeepRegistrationRequests is Owned {
 
     /**
      * @notice owner calls this function to set minimum LINK required to send registration request
-     * @param minimumLINKWei minimum LINK required to send registration request
+     * @param minimumLINKJuels minimum LINK required to send registration request
      */
-    function setMinLINKWei(uint256 minimumLINKWei) external onlyOwner() {
-        emit MinLINKChanged(s_minLINKWei, minimumLINKWei);
-        s_minLINKWei = minimumLINKWei;
+    function setMinLINKJuels(uint256 minimumLINKJuels) external onlyOwner() {
+        emit MinLINKChanged(s_minLINKJuels, minimumLINKJuels);
+        s_minLINKJuels = minimumLINKJuels;
     }
 
     /**
      * @notice read the minimum LINK required to send registration request
      */
-    function getMinLINKWei() external view returns (uint256) {
-        return s_minLINKWei;
+    function getMinLINKJuels() external view returns (uint256) {
+        return s_minLINKJuels;
     }
 
     /**
@@ -230,7 +230,7 @@ contract UpkeepRegistrationRequests is Owned {
 
     /**
      * @notice Called when LINK is sent to the contract via `transferAndCall`
-     * @param amount Amount of LINK sent (specified in wei)
+     * @param amount Amount of LINK sent (specified in Juels)
      * @param data Payload of the transaction
      */
     function onTokenTransfer(
@@ -238,7 +238,7 @@ contract UpkeepRegistrationRequests is Owned {
         uint256 amount,
         bytes calldata data
     ) external onlyLINK() permittedFunctionsForLINK(data) {
-        require(amount >= s_minLINKWei, "Insufficient payment");
+        require(amount >= s_minLINKJuels, "Insufficient payment");
         (bool success, ) = address(this).delegatecall(data); // calls register
         require(success, "Unable to create request");
     }
