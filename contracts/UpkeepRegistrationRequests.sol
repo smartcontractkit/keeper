@@ -114,8 +114,9 @@ contract UpkeepRegistrationRequests is Owned {
     function resetWindowIfRequired(AutoApprovedConfig memory config) private {
         uint64 blocksPassed = uint64(block.number - config.windowStart);
         if ((blocksPassed) >= config.windowSizeInBlocks) {
-            s_config.windowStart = uint64(block.number);
-            s_config.approvedInCurrentWindow = 0;
+            config.windowStart = uint64(block.number);
+            config.approvedInCurrentWindow = 0;
+            s_config = config;
         }
     }
 
@@ -140,7 +141,8 @@ contract UpkeepRegistrationRequests is Owned {
                     adminAddress,
                     checkData
                 );
-            s_config.approvedInCurrentWindow++;
+            config.approvedInCurrentWindow++;
+            s_config = config;
 
             // emit approve event
             emit RegistrationApproved(hash, name, upkeepId);
