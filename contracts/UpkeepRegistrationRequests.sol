@@ -8,10 +8,10 @@ import "./KeeperRegistryInterface.sol";
 /**
  * @notice Contract to accept requests for upkeep registrations
  * @dev There are 2 registration workflows in this contract
- * Flow 1. auto approve OFF / manual registration - UI calls `register` function on this contract, KeeperRegistry owner registers manually on KeeperRegistry,
- * this contract owner then calls `approved` on this contract to let UI and others know that the upkeep has now been registered.
- * Flow 2. auto approve ON / real time registration - UI calls `register` function as before, which calls the `registerUpkeep` function directly on keeper registry
- * and then emits approved event to finish the flow automatically without manual intervention.
+ * Flow 1. auto approve OFF / manual registration - UI calls `register` function on this contract, this contract owner at a later time then manually 
+ *  calls `sendRegisterUpkeep` to register upkeep and emit events to inform UI and others interested.
+ * Flow 2. auto approve ON / real time registration - UI calls `register` function as before, which calls the `registerUpkeep` function directly on 
+ *  keeper registry and then emits approved event to finish the flow automatically without manual intervention.
  * The idea is to have same interface(functions,events) for UI or anyone using this contract irrespective of auto approve being enabled or not.
  * they can just listen to `RegistrationRequested` & `RegistrationApproved` events and know the status on registrations.
  */
@@ -96,18 +96,44 @@ contract UpkeepRegistrationRequests is Owned {
 
         // if auto approve is true send registration request to the Keeper Registry contract
         if (config.enabled) {
-            _resetWindowIfRequired(config);
+            if (config.approvedInCurrentWindow < config.allowedPerWindow) {
+                sendRegisterUpkeep(
+                    name,
+                    upkeepContract,
+                    gasLimit,
+                    adminAddress,
+                    checkData,
+                    hash
+                );
 
-            _registerWithinThreshold(
-                name,
+                config.approvedInCurrentWindow++;
+                s_config = config;
+            }
+        }
+    }
+
+    /**
+     * @dev auto register only if max number of allowed registrations are not already completed for this auto approve window
+     */
+    function sendRegisterUpkeep(
+        string memory name,
+        address upkeepContract,
+        uint32 gasLimit,
+        address adminAddress,
+        bytes calldata checkData,
+        bytes32 hash
+    ) public onlyOwnerOrLINK() {
+        //call register on keeper Registry
+        uint256 upkeepId =
+            s_keeperRegistry.registerUpkeep(
                 upkeepContract,
                 gasLimit,
                 adminAddress,
-                checkData,
-                hash,
-                config
+                checkData
             );
-        }
+
+        // emit approve event
+        emit RegistrationApproved(hash, name, upkeepId);
     }
 
     /**
@@ -218,35 +244,6 @@ contract UpkeepRegistrationRequests is Owned {
         }
     }
 
-    /**
-     * @dev auto register only if max number of allowed registrations are not already completed for this auto approve window
-     */
-    function _registerWithinThreshold(
-        string memory name,
-        address upkeepContract,
-        uint32 gasLimit,
-        address adminAddress,
-        bytes calldata checkData,
-        bytes32 hash,
-        AutoApprovedConfig memory config
-    ) private {
-        if (config.approvedInCurrentWindow < config.allowedPerWindow) {
-            //call register on keeper Registry
-            uint256 upkeepId =
-                s_keeperRegistry.registerUpkeep(
-                    upkeepContract,
-                    gasLimit,
-                    adminAddress,
-                    checkData
-                );
-            config.approvedInCurrentWindow++;
-            s_config = config;
-
-            // emit approve event
-            emit RegistrationApproved(hash, name, upkeepId);
-        }
-    }
-
     //MODIFIERS
 
     /**
@@ -254,6 +251,17 @@ contract UpkeepRegistrationRequests is Owned {
      */
     modifier onlyLINK() {
         require(msg.sender == LINK_ADDRESS, "Must use LINK token");
+        _;
+    }
+
+    /**
+     * @dev Reverts if called by anyone other than the contract owner or registrar.
+     */
+    modifier onlyOwnerOrLINK() {
+        require(
+            msg.sender == owner || msg.sender == LINK_ADDRESS,
+            "Only callable by owner or registrar"
+        );
         _;
     }
 
