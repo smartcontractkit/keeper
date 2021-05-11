@@ -8,9 +8,9 @@ import "./KeeperRegistryInterface.sol";
 /**
  * @notice Contract to accept requests for upkeep registrations
  * @dev There are 2 registration workflows in this contract
- * Flow 1. auto approve OFF / manual registration - UI calls `register` function on this contract, this contract owner at a later time then manually 
- *  calls `sendRegisterUpkeep` to register upkeep and emit events to inform UI and others interested.
- * Flow 2. auto approve ON / real time registration - UI calls `register` function as before, which calls the `registerUpkeep` function directly on 
+ * Flow 1. auto approve OFF / manual registration - UI calls `register` function on this contract, this contract owner at a later time then manually
+ *  calls `approve` to register upkeep and emit events to inform UI and others interested.
+ * Flow 2. auto approve ON / real time registration - UI calls `register` function as before, which calls the `registerUpkeep` function directly on
  *  keeper registry and then emits approved event to finish the flow automatically without manual intervention.
  * The idea is to have same interface(functions,events) for UI or anyone using this contract irrespective of auto approve being enabled or not.
  * they can just listen to `RegistrationRequested` & `RegistrationApproved` events and know the status on registrations.
@@ -97,7 +97,7 @@ contract UpkeepRegistrationRequests is Owned {
         // if auto approve is true send registration request to the Keeper Registry contract
         if (config.enabled) {
             if (config.approvedInCurrentWindow < config.allowedPerWindow) {
-                sendRegisterUpkeep(
+                approve(
                     name,
                     upkeepContract,
                     gasLimit,
@@ -115,7 +115,7 @@ contract UpkeepRegistrationRequests is Owned {
     /**
      * @dev auto register only if max number of allowed registrations are not already completed for this auto approve window
      */
-    function sendRegisterUpkeep(
+    function approve(
         string memory name,
         address upkeepContract,
         uint32 gasLimit,
@@ -134,20 +134,6 @@ contract UpkeepRegistrationRequests is Owned {
 
         // emit approve event
         emit RegistrationApproved(hash, name, upkeepId);
-    }
-
-    /**
-     * @notice this function is called after registering upkeep on the Registry contract
-     * @param hash hash of the message data of the registration request that is being approved
-     * @param displayName display name for the upkeep being approved
-     * @param upkeepId id of the upkeep that has been registered
-     */
-    function approve(
-        bytes32 hash,
-        string memory displayName,
-        uint256 upkeepId
-    ) external onlyOwner() {
-        emit RegistrationApproved(hash, displayName, upkeepId);
     }
 
     /**
