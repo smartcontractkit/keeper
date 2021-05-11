@@ -78,7 +78,10 @@ contract UpkeepRegistrationRequests is Owned {
         address adminAddress,
         bytes calldata checkData,
         uint8 source
-    ) external onlyLINK() {
+    ) 
+      external 
+      onlyLINK() 
+    {
         bytes32 hash = keccak256(msg.data);
 
         emit RegistrationRequested(
@@ -123,8 +126,10 @@ contract UpkeepRegistrationRequests is Owned {
         address adminAddress,
         bytes calldata checkData,
         bytes32 hash
-    ) external onlyOwner() {
-        
+    ) 
+      external 
+      onlyOwner() 
+    {
         _approve(
             name,
             upkeepContract,
@@ -139,7 +144,12 @@ contract UpkeepRegistrationRequests is Owned {
      * @notice owner calls this function to set minimum LINK required to send registration request
      * @param minimumLINKJuels minimum LINK required to send registration request
      */
-    function setMinLINKJuels(uint256 minimumLINKJuels) external onlyOwner() {
+    function setMinLINKJuels(
+        uint256 minimumLINKJuels
+    ) 
+      external 
+      onlyOwner() 
+    {
         emit MinLINKChanged(s_minLINKJuels, minimumLINKJuels);
         s_minLINKJuels = minimumLINKJuels;
     }
@@ -147,7 +157,13 @@ contract UpkeepRegistrationRequests is Owned {
     /**
      * @notice read the minimum LINK required to send registration request
      */
-    function getMinLINKJuels() external view returns (uint256) {
+    function getMinLINKJuels() 
+      external 
+      view 
+      returns (
+          uint256
+      )
+    {
         return s_minLINKJuels;
     }
 
@@ -163,7 +179,10 @@ contract UpkeepRegistrationRequests is Owned {
         uint32 windowSizeInBlocks,
         uint16 allowedPerWindow,
         address keeperRegistry
-    ) external onlyOwner() {
+    )
+      external 
+      onlyOwner() 
+    {
         s_config = AutoApprovedConfig({
             enabled: enabled,
             allowedPerWindow: allowedPerWindow,
@@ -209,7 +228,11 @@ contract UpkeepRegistrationRequests is Owned {
         address, /* sender */
         uint256 amount,
         bytes calldata data
-    ) external onlyLINK() permittedFunctionsForLINK(data) {
+    ) 
+      external 
+      onlyLINK() 
+      permittedFunctionsForLINK(data) 
+    {
         require(amount >= s_minLINKJuels, "Insufficient payment");
         (bool success, ) = address(this).delegatecall(data); // calls register
         require(success, "Unable to create request");
@@ -220,7 +243,11 @@ contract UpkeepRegistrationRequests is Owned {
     /**
      * @dev reset auto approve window if passed end of current window
      */
-    function _resetWindowIfRequired(AutoApprovedConfig memory config) private {
+    function _resetWindowIfRequired(
+        AutoApprovedConfig memory config
+    ) 
+      private 
+    {
         uint64 blocksPassed = uint64(block.number - config.windowStart);
         if (blocksPassed >= config.windowSizeInBlocks) {
             config.windowStart = uint64(block.number);
@@ -239,7 +266,9 @@ contract UpkeepRegistrationRequests is Owned {
         address adminAddress,
         bytes calldata checkData,
         bytes32 hash
-    ) private {
+    ) 
+      private 
+    {
         //call register on keeper Registry
         uint256 upkeepId =
             s_keeperRegistry.registerUpkeep(
@@ -267,7 +296,10 @@ contract UpkeepRegistrationRequests is Owned {
      * @dev Reverts if the given data does not begin with the `register` function selector
      * @param _data The data payload of the request
      */
-    modifier permittedFunctionsForLINK(bytes memory _data) {
+    modifier permittedFunctionsForLINK(
+        bytes memory _data
+    ) 
+    {
         bytes4 funcSelector;
         assembly {
             // solhint-disable-next-line avoid-low-level-calls
