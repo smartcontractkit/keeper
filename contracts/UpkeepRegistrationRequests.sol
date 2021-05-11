@@ -52,7 +52,11 @@ contract UpkeepRegistrationRequests is Owned {
         uint256 indexed upkeepId
     );
 
-    constructor(address LINKAddress, uint256 minimumLINKJuels) {
+    constructor(
+        address LINKAddress, 
+        uint256 minimumLINKJuels
+    ) 
+    {
         LINK_ADDRESS = LINKAddress;
         s_minLINKJuels = minimumLINKJuels;
     }
