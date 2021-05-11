@@ -57,6 +57,8 @@ contract KeeperRegistry is
   AggregatorV3Interface public immutable LINK_ETH_FEED;
   AggregatorV3Interface public immutable FAST_GAS_FEED;
 
+  address private s_registrar;
+
   struct Upkeep {
     address target;
     uint32 executeGas;
@@ -139,7 +141,10 @@ contract KeeperRegistry is
     address indexed from,
     address indexed to
   );
-
+  event RegistrarChanged(
+    address indexed from,
+    address indexed to
+  );
   /**
    * @param link address of the LINK Token
    * @param linkEthFeed address of the LINK/ETH price feed
@@ -198,7 +203,7 @@ contract KeeperRegistry is
   )
     external
     override
-    onlyOwner()
+    onlyOwnerOrRegistrar()
     returns (
       uint256 id
     )
@@ -575,6 +580,21 @@ contract KeeperRegistry is
     emit KeepersUpdated(keepers, payees);
   }
 
+  /**
+   * @notice update registrar
+   * @param registrar new registrar
+   */
+  function setRegistrar(
+    address registrar
+  )
+    external
+    onlyOwnerOrRegistrar()
+  {
+    address previous = s_registrar;
+    require(registrar != previous, "Same registrar");
+    s_registrar = registrar;
+    emit RegistrarChanged(previous, registrar);
+  }
 
   // GETTERS
 
@@ -649,6 +669,19 @@ contract KeeperRegistry is
     )
   {
     return s_keeperList;
+  }
+
+ /**
+   * @notice read the current registrar
+   */
+  function getRegistrar()
+    external
+    view
+    returns (
+      address
+    )
+  {
+    return s_registrar;
   }
 
   /**
@@ -859,6 +892,14 @@ contract KeeperRegistry is
     address to
   ) {
     require(to != address(0), "cannot send to zero address");
+    _;
+  }
+
+    /**
+   * @dev Reverts if called by anyone other than the contract owner or registrar.
+   */
+  modifier onlyOwnerOrRegistrar() {
+    require(msg.sender == owner || msg.sender == s_registrar, "Only callable by owner or registrar");
     _;
   }
 
