@@ -96,6 +96,7 @@ contract UpkeepRegistrationRequests is Owned {
 
         // if auto approve is true send registration request to the Keeper Registry contract
         if (config.enabled) {
+            _resetWindowIfRequired(config);
             if (config.approvedInCurrentWindow < config.allowedPerWindow) {
                 approve(
                     name,
