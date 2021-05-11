@@ -98,7 +98,10 @@ contract UpkeepRegistrationRequests is Owned {
         if (config.enabled) {
             _resetWindowIfRequired(config);
             if (config.approvedInCurrentWindow < config.allowedPerWindow) {
-                approve(
+                config.approvedInCurrentWindow++;
+                s_config = config;
+
+                _approve(
                     name,
                     upkeepContract,
                     gasLimit,
@@ -106,15 +109,12 @@ contract UpkeepRegistrationRequests is Owned {
                     checkData,
                     hash
                 );
-
-                config.approvedInCurrentWindow++;
-                s_config = config;
             }
         }
     }
 
     /**
-     * @dev auto register only if max number of allowed registrations are not already completed for this auto approve window
+     * @dev register upkeep on KeeperRegistry contract and emit RegistrationApproved event
      */
     function approve(
         string memory name,
@@ -123,18 +123,8 @@ contract UpkeepRegistrationRequests is Owned {
         address adminAddress,
         bytes calldata checkData,
         bytes32 hash
-    ) public onlyOwnerOrLINK() {
-        //call register on keeper Registry
-        uint256 upkeepId =
-            s_keeperRegistry.registerUpkeep(
-                upkeepContract,
-                gasLimit,
-                adminAddress,
-                checkData
-            );
-
-        // emit approve event
-        emit RegistrationApproved(hash, name, upkeepId);
+    ) external onlyOwner() {
+        _approve(name, upkeepContract, gasLimit, adminAddress, checkData, hash);
     }
 
     /**
@@ -231,6 +221,30 @@ contract UpkeepRegistrationRequests is Owned {
         }
     }
 
+    /**
+     * @dev register upkeep on KeeperRegistry contract and emit RegistrationApproved event
+     */
+    function _approve(
+        string memory name,
+        address upkeepContract,
+        uint32 gasLimit,
+        address adminAddress,
+        bytes calldata checkData,
+        bytes32 hash
+    ) private {
+        //call register on keeper Registry
+        uint256 upkeepId =
+            s_keeperRegistry.registerUpkeep(
+                upkeepContract,
+                gasLimit,
+                adminAddress,
+                checkData
+            );
+
+        // emit approve event
+        emit RegistrationApproved(hash, name, upkeepId);
+    }
+
     //MODIFIERS
 
     /**
@@ -238,17 +252,6 @@ contract UpkeepRegistrationRequests is Owned {
      */
     modifier onlyLINK() {
         require(msg.sender == LINK_ADDRESS, "Must use LINK token");
-        _;
-    }
-
-    /**
-     * @dev Reverts if called by anyone other than the contract owner or registrar.
-     */
-    modifier onlyOwnerOrLINK() {
-        require(
-            msg.sender == owner || msg.sender == LINK_ADDRESS,
-            "Only callable by owner or registrar"
-        );
         _;
     }
 
