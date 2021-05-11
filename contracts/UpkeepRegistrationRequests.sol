@@ -124,7 +124,15 @@ contract UpkeepRegistrationRequests is Owned {
         bytes calldata checkData,
         bytes32 hash
     ) external onlyOwner() {
-        _approve(name, upkeepContract, gasLimit, adminAddress, checkData, hash);
+        
+        _approve(
+            name,
+            upkeepContract,
+            gasLimit,
+            adminAddress,
+            checkData,
+            hash
+        );    
     }
 
     /**
@@ -214,7 +222,7 @@ contract UpkeepRegistrationRequests is Owned {
      */
     function _resetWindowIfRequired(AutoApprovedConfig memory config) private {
         uint64 blocksPassed = uint64(block.number - config.windowStart);
-        if ((blocksPassed) >= config.windowSizeInBlocks) {
+        if (blocksPassed >= config.windowSizeInBlocks) {
             config.windowStart = uint64(block.number);
             config.approvedInCurrentWindow = 0;
             s_config = config;
