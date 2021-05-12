@@ -36,6 +36,7 @@ contract("UpkeepRegistrationRequests", (accounts) => {
   const blockCountPerTurn = new BN(3);
   const emptyBytes = "0x00";
   const stalenessSeconds = new BN(43820);
+  const gasCeilingMultiplier = new BN(1)
   const maxCheckGas = new BN(20000000);
   const fallbackGasPrice = new BN(200);
   const fallbackLinkPrice = new BN(200000000);
@@ -56,6 +57,7 @@ contract("UpkeepRegistrationRequests", (accounts) => {
       blockCountPerTurn,
       maxCheckGas,
       stalenessSeconds,
+      gasCeilingMultiplier,
       fallbackGasPrice,
       fallbackLinkPrice,
       { from: owner }
@@ -193,7 +195,7 @@ contract("UpkeepRegistrationRequests", (accounts) => {
       //confirm that a new upkeep has NOT been registered and upkeep count is still the same
       assert.deepEqual(beforeCount, afterCount);
 
-      //confirm that only RegistrationRequested event is amitted and RegistrationApproved event is not 
+      //confirm that only RegistrationRequested event is amitted and RegistrationApproved event is not
       let event_RegistrationRequested = receipt.rawLogs.some((l) => {
         return (
           l.topics[0] ==

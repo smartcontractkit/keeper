@@ -29,6 +29,7 @@ contract('KeeperRegistry', (accounts) => {
   const extraGas = new BN('250000')
   const registryGasOverhead = new BN('80000')
   const stalenessSeconds = new BN(43820)
+  const gasCeilingMultiplier = new BN(1)
   const maxCheckGas = new BN(20000000)
   const fallbackGasPrice = new BN(200)
   const fallbackLinkPrice = new BN(200000000)
@@ -55,6 +56,7 @@ contract('KeeperRegistry', (accounts) => {
       blockCountPerTurn,
       maxCheckGas,
       stalenessSeconds,
+      gasCeilingMultiplier,
       fallbackGasPrice,
       fallbackLinkPrice,
       { from: owner }
@@ -460,6 +462,61 @@ contract('KeeperRegistry', (accounts) => {
         assert.isTrue(linkForGas(3300).gt(difference)) // instead test a range
       })
 
+      it('only pays at a rate up to the gas ceiling', async () => {
+        const multiplier = new BN(10)
+        const gasPrice = new BN('1000000000') // 10M x the gas feed's rate
+        await registry.setConfig(
+          paymentPremiumPPB,
+          blockCountPerTurn,
+          maxCheckGas,
+          stalenessSeconds,
+          multiplier,
+          fallbackGasPrice,
+          fallbackLinkPrice,
+          { from: owner }
+        )
+
+        const before = (await registry.getKeeperInfo(keeper1)).balance
+        const { receipt } = await registry.performUpkeep(id, "0x", { from: keeper1, gasPrice })
+        const after = (await registry.getKeeperInfo(keeper1)).balance
+
+        const max = linkForGas(executeGas).mul(multiplier)
+        const totalTx = linkForGas(receipt.gasUsed).mul(multiplier)
+        const difference = after.sub(before)
+        assert.isTrue(max.gt(totalTx))
+        assert.isTrue(totalTx.gt(difference))
+        assert.isTrue(linkForGas(3100).mul(multiplier).lt(difference))
+        assert.isTrue(linkForGas(3300).mul(multiplier).gt(difference))
+      })
+
+      it('only pays as much as the node spent', async () => {
+        const multiplier = new BN(10)
+        const gasPrice = new BN(200) // 2X the gas feed's rate
+        const effectiveMultiplier = new BN(2)
+        await registry.setConfig(
+          paymentPremiumPPB,
+          blockCountPerTurn,
+          maxCheckGas,
+          stalenessSeconds,
+          multiplier,
+          fallbackGasPrice,
+          fallbackLinkPrice,
+          { from: owner }
+        )
+
+        const before = (await registry.getKeeperInfo(keeper1)).balance
+        const { receipt } = await registry.performUpkeep(id, "0x", { from: keeper1, gasPrice })
+        const after = (await registry.getKeeperInfo(keeper1)).balance
+
+        const max = linkForGas(executeGas).mul(effectiveMultiplier)
+        const totalTx = linkForGas(receipt.gasUsed).mul(effectiveMultiplier)
+        const difference = after.sub(before)
+        assert.isTrue(max.gt(totalTx))
+        assert.isTrue(totalTx.gt(difference))
+        assert.isTrue(linkForGas(3100).mul(effectiveMultiplier).lt(difference))
+        assert.isTrue(linkForGas(3300).mul(effectiveMultiplier).gt(difference))
+      })
+
       it('pays the caller even if the target function fails', async () => {
         const { receipt } = await registry.registerUpkeep(
           mock.address,
@@ -480,7 +537,7 @@ contract('KeeperRegistry', (accounts) => {
         assert.isTrue(keeperBalanceAfter.gt(keeperBalanceBefore))
       })
 
-      it('reverts if the upkeep is called by a non-keeper', async () => {
+      it('reverts if called by a non-keeper', async () => {
         await expectRevert(
           registry.performUpkeep(id, "0x", { from: nonkeeper }),
           'only active keepers'
@@ -898,6 +955,7 @@ contract('KeeperRegistry', (accounts) => {
           checks,
           maxGas,
           staleness,
+          gasCeilingMultiplier,
           fbGasEth,
           fbLinkEth,
           { from: payee1 }
@@ -917,6 +975,7 @@ contract('KeeperRegistry', (accounts) => {
         checks,
         maxGas,
         staleness,
+        gasCeilingMultiplier,
         fbGasEth,
         fbLinkEth,
         { from: owner }
@@ -937,6 +996,7 @@ contract('KeeperRegistry', (accounts) => {
         checks,
         maxGas,
         staleness,
+        gasCeilingMultiplier,
         fbGasEth,
         fbLinkEth,
         { from: owner }
@@ -946,6 +1006,7 @@ contract('KeeperRegistry', (accounts) => {
         blockCountPerTurn: checks,
         checkGasLimit: maxGas,
         stalenessSeconds: staleness,
+        gasCeilingMultiplier: gasCeilingMultiplier,
         fallbackGasPrice: fbGasEth,
         fallbackLinkPrice: fbLinkEth,
       })

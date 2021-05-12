@@ -9,6 +9,7 @@ import "./vendor/Owned.sol";
 import "./vendor/Address.sol";
 import "./vendor/Pausable.sol";
 import "./vendor/ReentrancyGuard.sol";
+import "./vendor/SignedSafeMath.sol";
 import "./SafeMath96.sol";
 import "./KeeperBase.sol";
 import "./KeeperCompatibleInterface.sol";
@@ -28,6 +29,7 @@ contract KeeperRegistry is
   using Address for address;
   using SafeMathChainlink for uint256;
   using SafeMath96 for uint96;
+  using SignedSafeMath for int256;
 
   address constant private ZERO_ADDRESS = address(0);
   address constant private IGNORE_ADDRESS = 0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF;
@@ -79,6 +81,7 @@ contract KeeperRegistry is
     uint24 blockCountPerTurn;
     uint32 checkGasLimit;
     uint24 stalenessSeconds;
+    uint16 gasCeilingMultiplier;
   }
 
   struct PerformParams {
@@ -118,6 +121,7 @@ contract KeeperRegistry is
     uint24 blockCountPerTurn,
     uint32 checkGasLimit,
     uint24 stalenessSeconds,
+    uint16 gasCeilingMultiplier,
     int256 fallbackGasPrice,
     int256 fallbackLinkPrice
   );
@@ -167,6 +171,7 @@ contract KeeperRegistry is
     uint24 blockCountPerTurn,
     uint32 checkGasLimit,
     uint24 stalenessSeconds,
+    uint16 gasCeilingMultiplier,
     int256 fallbackGasPrice,
     int256 fallbackLinkPrice
   ) {
@@ -179,6 +184,7 @@ contract KeeperRegistry is
       blockCountPerTurn,
       checkGasLimit,
       stalenessSeconds,
+      gasCeilingMultiplier,
       fallbackGasPrice,
       fallbackLinkPrice
     );
@@ -522,6 +528,7 @@ contract KeeperRegistry is
     uint24 blockCountPerTurn,
     uint32 checkGasLimit,
     uint24 stalenessSeconds,
+    uint16 gasCeilingMultiplier,
     int256 fallbackGasPrice,
     int256 fallbackLinkPrice
   )
@@ -532,7 +539,8 @@ contract KeeperRegistry is
       paymentPremiumPPB: paymentPremiumPPB,
       blockCountPerTurn: blockCountPerTurn,
       checkGasLimit: checkGasLimit,
-      stalenessSeconds: stalenessSeconds
+      stalenessSeconds: stalenessSeconds,
+      gasCeilingMultiplier: gasCeilingMultiplier
     });
     s_fallbackGasPrice = fallbackGasPrice;
     s_fallbackLinkPrice = fallbackLinkPrice;
@@ -542,6 +550,7 @@ contract KeeperRegistry is
       blockCountPerTurn,
       checkGasLimit,
       stalenessSeconds,
+      gasCeilingMultiplier,
       fallbackGasPrice,
       fallbackLinkPrice
     );
@@ -830,9 +839,7 @@ contract KeeperRegistry is
     Upkeep memory upkeep = s_upkeep[params.id];
     uint256 gasLimit = upkeep.executeGas;
     (int256 gasWei, int256 linkEth) = getFeedData();
-    if (gasWei > int256(tx.gasprice)) {
-      gasWei = int256(tx.gasprice);
-    }
+    gasWei = adjustGasPrice(gasWei);
     uint96 payment = calculatePaymentAmount(gasLimit, gasWei, linkEth);
     require(upkeep.balance >= payment, "insufficient payment");
     require(upkeep.lastKeeper != params.from, "keepers must take turns");
@@ -869,6 +876,23 @@ contract KeeperRegistry is
     view
   {
     require(s_upkeep[id].maxValidBlocknumber > block.number, "invalid upkeep id");
+  }
+
+  /**
+   * @dev adjusts the gas price to min(ceiling, tx.gasprice)
+   */
+  function adjustGasPrice(
+    int256 gasWei
+  )
+    private
+    view
+    returns(int256 adjustedPrice)
+  {
+    adjustedPrice = int256(tx.gasprice);
+    int256 ceiling = gasWei.mul(s_config.gasCeilingMultiplier);
+    if(adjustedPrice > ceiling) {
+      adjustedPrice = ceiling;
+    }
   }
 
 
