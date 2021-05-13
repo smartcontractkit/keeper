@@ -944,6 +944,7 @@ contract('KeeperRegistry', (accounts) => {
     const payment = new BN(1)
     const checks = new BN(2)
     const staleness = new BN(3)
+    const ceiling = new BN(10)
     const maxGas = new BN(4)
     const fbGasEth = new BN(5)
     const fbLinkEth = new BN(6)
@@ -969,13 +970,14 @@ contract('KeeperRegistry', (accounts) => {
       assert.isTrue(paymentPremiumPPB.eq(old.paymentPremiumPPB))
       assert.isTrue(blockCountPerTurn.eq(old.blockCountPerTurn))
       assert.isTrue(stalenessSeconds.eq(old.stalenessSeconds))
+      assert.isTrue(gasCeilingMultiplier.eq(old.gasCeilingMultiplier))
 
       await registry.setConfig(
         payment,
         checks,
         maxGas,
         staleness,
-        gasCeilingMultiplier,
+        ceiling,
         fbGasEth,
         fbLinkEth,
         { from: owner }
@@ -985,6 +987,7 @@ contract('KeeperRegistry', (accounts) => {
       assert.isTrue(updated.paymentPremiumPPB.eq(payment))
       assert.isTrue(updated.blockCountPerTurn.eq(checks))
       assert.isTrue(updated.stalenessSeconds.eq(staleness))
+      assert.isTrue(updated.gasCeilingMultiplier.eq(ceiling))
       assert.isTrue(updated.checkGasLimit.eq(maxGas))
       assert.isTrue(updated.fallbackGasPrice.eq(fbGasEth))
       assert.isTrue(updated.fallbackLinkPrice.eq(fbLinkEth))
@@ -996,7 +999,7 @@ contract('KeeperRegistry', (accounts) => {
         checks,
         maxGas,
         staleness,
-        gasCeilingMultiplier,
+        ceiling,
         fbGasEth,
         fbLinkEth,
         { from: owner }
@@ -1006,7 +1009,7 @@ contract('KeeperRegistry', (accounts) => {
         blockCountPerTurn: checks,
         checkGasLimit: maxGas,
         stalenessSeconds: staleness,
-        gasCeilingMultiplier: gasCeilingMultiplier,
+        gasCeilingMultiplier: ceiling,
         fallbackGasPrice: fbGasEth,
         fallbackLinkPrice: fbLinkEth,
       })

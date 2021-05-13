@@ -160,6 +160,8 @@ contract KeeperRegistry is
    * @param checkGasLimit gas limit when checking for upkeep
    * @param stalenessSeconds number of seconds that is allowed for feed data to
    * be stale before switching to the fallback pricing
+   * @param gasCeilingMultiplier multiplier to apply to the fast gas feed price
+   * when calculating the payment ceiling for keepers
    * @param fallbackGasPrice gas price used if the gas price feed is stale
    * @param fallbackLinkPrice LINK price used if the LINK price feed is stale
    */
@@ -724,6 +726,7 @@ contract KeeperRegistry is
       uint24 blockCountPerTurn,
       uint32 checkGasLimit,
       uint24 stalenessSeconds,
+      uint16 gasCeilingMultiplier,
       int256 fallbackGasPrice,
       int256 fallbackLinkPrice
     )
@@ -734,6 +737,7 @@ contract KeeperRegistry is
       config.blockCountPerTurn,
       config.checkGasLimit,
       config.stalenessSeconds,
+      config.gasCeilingMultiplier,
       s_fallbackGasPrice,
       s_fallbackLinkPrice
     );
