@@ -12,7 +12,7 @@
     "@chainlink/contracts": "^0.1.6",
     "@nomiclabs/hardhat-truffle5": "^2.0.0",
     "@nomiclabs/hardhat-web3": "^2.0.0",
-    "hardhat": "^2.0.6",
+    "hardhat": "^2.3.0",
     "hardhat-gas-reporter": "^1.0.4",
     "truffle": "^5"
   },

@@ -458,8 +458,8 @@ contract('KeeperRegistry', (accounts) => {
         const difference = after.sub(before)
         assert.isTrue(max.gt(totalTx))
         assert.isTrue(totalTx.gt(difference))
-        assert.isTrue(linkForGas(3100).lt(difference)) // exact number is flaky
-        assert.isTrue(linkForGas(3300).gt(difference)) // instead test a range
+        assert.isTrue(linkForGas(5700).lt(difference)) // exact number is flaky
+        assert.isTrue(linkForGas(6000).gt(difference)) // instead test a range
       })
 
       it('only pays at a rate up to the gas ceiling', async () => {
@@ -485,8 +485,8 @@ contract('KeeperRegistry', (accounts) => {
         const difference = after.sub(before)
         assert.isTrue(max.gt(totalTx))
         assert.isTrue(totalTx.gt(difference))
-        assert.isTrue(linkForGas(3100).mul(multiplier).lt(difference))
-        assert.isTrue(linkForGas(3300).mul(multiplier).gt(difference))
+        assert.isTrue(linkForGas(5700).mul(multiplier).lt(difference))
+        assert.isTrue(linkForGas(6000).mul(multiplier).gt(difference))
       })
 
       it('only pays as much as the node spent', async () => {
@@ -513,8 +513,8 @@ contract('KeeperRegistry', (accounts) => {
         const difference = after.sub(before)
         assert.isTrue(max.gt(totalTx))
         assert.isTrue(totalTx.gt(difference))
-        assert.isTrue(linkForGas(3100).mul(effectiveMultiplier).lt(difference))
-        assert.isTrue(linkForGas(3300).mul(effectiveMultiplier).gt(difference))
+        assert.isTrue(linkForGas(5700).mul(effectiveMultiplier).lt(difference))
+        assert.isTrue(linkForGas(6000).mul(effectiveMultiplier).gt(difference))
       })
 
       it('pays the caller even if the target function fails', async () => {
