@@ -41,6 +41,8 @@ contract("UpkeepRegistrationRequests", (accounts) => {
   const fallbackGasPrice = new BN(200);
   const fallbackLinkPrice = new BN(200000000);
   const minimumLINKWei = new BN(1000000000000000000n);
+  const amount = new BN(5000000000000000000n);
+
   let linkToken, linkEthFeed, gasPriceFeed, registry, mock;
 
   beforeEach(async () => {
@@ -86,6 +88,7 @@ contract("UpkeepRegistrationRequests", (accounts) => {
           executeGas,
           admin,
           emptyBytes,
+          amount,
           source,
           { from: someAddress }
         ),
@@ -107,7 +110,6 @@ contract("UpkeepRegistrationRequests", (accounts) => {
       );
 
       //register with auto approve ON
-      const amount = ether("1");
       let abiEncodedBytes = registrar.contract.methods
         .register(
           upkeepName,
@@ -116,6 +118,7 @@ contract("UpkeepRegistrationRequests", (accounts) => {
           executeGas,
           admin,
           emptyBytes,
+          amount,
           source
         )
         .encodeABI();
@@ -137,7 +140,7 @@ contract("UpkeepRegistrationRequests", (accounts) => {
         return (
           l.topics[0] ==
           web3.utils.keccak256(
-            "RegistrationRequested(bytes32,string,bytes,address,uint32,address,bytes,uint8)"
+            "RegistrationRequested(bytes32,string,bytes,address,uint32,address,bytes,uint96,uint8)"
           )
         );
       });
@@ -172,7 +175,6 @@ contract("UpkeepRegistrationRequests", (accounts) => {
       );
 
       //register with auto approve OFF
-      const amount = ether("1");
       let abiEncodedBytes = registrar.contract.methods
         .register(
           upkeepName,
@@ -181,6 +183,7 @@ contract("UpkeepRegistrationRequests", (accounts) => {
           executeGas,
           admin,
           emptyBytes,
+          amount,
           source
         )
         .encodeABI();
@@ -200,7 +203,7 @@ contract("UpkeepRegistrationRequests", (accounts) => {
         return (
           l.topics[0] ==
           web3.utils.keccak256(
-            "RegistrationRequested(bytes32,string,bytes,address,uint32,address,bytes,uint8)"
+            "RegistrationRequested(bytes32,string,bytes,address,uint32,address,bytes,uint96,uint8)"
           )
         );
       });
@@ -234,7 +237,6 @@ contract("UpkeepRegistrationRequests", (accounts) => {
         { from: registrarOwner }
       );
 
-      const amount = ether("1");
       let abiEncodedBytes = registrar.contract.methods
         .register(
           upkeepName,
@@ -243,6 +245,7 @@ contract("UpkeepRegistrationRequests", (accounts) => {
           executeGas,
           admin,
           emptyBytes,
+          amount,
           source
         )
         .encodeABI();

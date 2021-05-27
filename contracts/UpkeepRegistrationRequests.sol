@@ -2,6 +2,7 @@
 
 pragma solidity 0.7.6;
 
+import "@chainlink/contracts/src/v0.7/interfaces/LinkTokenInterface.sol";
 import "./vendor/Owned.sol";
 import "./KeeperRegistryInterface.sol";
 
@@ -20,7 +21,8 @@ contract UpkeepRegistrationRequests is Owned {
 
     uint256 private s_minLINKJuels;
 
-    address public immutable LINK_ADDRESS;
+    LinkTokenInterface public immutable LINK;
+    uint96 constant private LINK_TOTAL_SUPPLY = 1e27;
 
     struct AutoApprovedConfig {
         bool enabled;
@@ -43,6 +45,7 @@ contract UpkeepRegistrationRequests is Owned {
         uint32 gasLimit,
         address adminAddress,
         bytes checkData,
+        uint96 amount,
         uint8 indexed source
     );
 
@@ -57,7 +60,7 @@ contract UpkeepRegistrationRequests is Owned {
         uint256 minimumLINKJuels
     ) 
     {
-        LINK_ADDRESS = LINKAddress;
+        LINK = LinkTokenInterface(LINKAddress);
         s_minLINKJuels = minimumLINKJuels;
     }
 
@@ -66,12 +69,13 @@ contract UpkeepRegistrationRequests is Owned {
     /**
      * @notice register can only be called through transferAndCall on LINK contract
      * @param name name of the upkeep to be registered
-     * @param encryptedEmail Amount of LINK sent (specified in Juels)
+     * @param encryptedEmail email address of upkeep contact
      * @param upkeepContract address to peform upkeep on
      * @param gasLimit amount of gas to provide the target contract when
      * performing upkeep
      * @param adminAddress address to cancel upkeep and withdraw remaining funds
      * @param checkData data passed to the contract when checking for upkeep
+     * @param amount amount to fund upkeep (specified in Juels)
      * @param source application sending this request
      */
     function register(
@@ -81,6 +85,7 @@ contract UpkeepRegistrationRequests is Owned {
         uint32 gasLimit,
         address adminAddress,
         bytes calldata checkData,
+        uint96 amount,
         uint8 source
     ) 
       external 
@@ -96,6 +101,7 @@ contract UpkeepRegistrationRequests is Owned {
             gasLimit,
             adminAddress,
             checkData,
+            amount,
             source
         );
 
@@ -114,6 +120,7 @@ contract UpkeepRegistrationRequests is Owned {
                     gasLimit,
                     adminAddress,
                     checkData,
+                    amount,
                     hash
                 );
             }
@@ -129,6 +136,7 @@ contract UpkeepRegistrationRequests is Owned {
         uint32 gasLimit,
         address adminAddress,
         bytes calldata checkData,
+        uint96 amount,
         bytes32 hash
     ) 
       external 
@@ -140,6 +148,7 @@ contract UpkeepRegistrationRequests is Owned {
             gasLimit,
             adminAddress,
             checkData,
+            amount,
             hash
         );    
     }
@@ -195,6 +204,8 @@ contract UpkeepRegistrationRequests is Owned {
             approvedInCurrentWindow: 0
         });
         s_keeperRegistry = KeeperRegistryBaseInterface(keeperRegistry);
+        
+        LINK.approve(address(s_keeperRegistry), LINK_TOTAL_SUPPLY);   
     }
 
     /**
@@ -269,6 +280,7 @@ contract UpkeepRegistrationRequests is Owned {
         uint32 gasLimit,
         address adminAddress,
         bytes calldata checkData,
+        uint96 amount,
         bytes32 hash
     ) 
       private 
@@ -281,6 +293,9 @@ contract UpkeepRegistrationRequests is Owned {
                 adminAddress,
                 checkData
             );
+        
+        //add transferred funds to the new upkeep 
+        s_keeperRegistry.addFunds(upkeepId,amount);
 
         // emit approve event
         emit RegistrationApproved(hash, name, upkeepId);
@@ -292,7 +307,7 @@ contract UpkeepRegistrationRequests is Owned {
      * @dev Reverts if not sent from the LINK token
      */
     modifier onlyLINK() {
-        require(msg.sender == LINK_ADDRESS, "Must use LINK token");
+        require(msg.sender == address(LINK), "Must use LINK token");
         _;
     }
 
