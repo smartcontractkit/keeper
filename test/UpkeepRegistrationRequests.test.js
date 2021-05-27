@@ -42,6 +42,7 @@ contract("UpkeepRegistrationRequests", (accounts) => {
   const fallbackLinkPrice = new BN(200000000);
   const minimumLINKWei = new BN(1000000000000000000n);
   const amount = new BN(5000000000000000000n);
+  const amount1 = new BN(6000000000000000000n);
 
   let linkToken, linkEthFeed, gasPriceFeed, registry, mock;
 
@@ -96,6 +97,44 @@ contract("UpkeepRegistrationRequests", (accounts) => {
       );
     });
 
+    it("reverts if the amount passed in data mismatches actual amount sent", async () => {
+      //get current upkeep count
+      const upkeepCount = await registry.getUpkeepCount();
+
+      //set auto approve ON with high threshold limits
+      await registrar.setRegistrationConfig(
+        true,
+        window_small,
+        threshold_big,
+        registry.address,
+        { from: registrarOwner }
+      );
+
+      //register with auto approve ON
+      let abiEncodedBytes = registrar.contract.methods
+        .register(
+          upkeepName,
+          emptyBytes,
+          mock.address,
+          executeGas,
+          admin,
+          emptyBytes,
+          amount1,
+          source
+        )
+        .encodeABI();
+
+      await expectRevert(
+        linkToken.transferAndCall(
+          registrar.address,
+          amount,
+          abiEncodedBytes
+        ),
+        "Amount mismatch"
+      );
+
+    });
+
     it("Auto Approve ON - registers an upkeep on KeeperRegistry instantly and emits both RegistrationRequested and RegistrationApproved events", async () => {
       //get current upkeep count
       const upkeepCount = await registry.getUpkeepCount();
@@ -133,6 +172,7 @@ contract("UpkeepRegistrationRequests", (accounts) => {
       assert.equal(newupkeep.target, mock.address);
       assert.equal(newupkeep.admin, admin);
       assert.equal(newupkeep.checkData, emptyBytes);
+      assert.equal(newupkeep.balance.toString(), amount.toString());
       assert.isTrue(newupkeep.executeGas.eq(executeGas));
 
       //confirm if RegistrationRequested and RegistrationApproved event are received

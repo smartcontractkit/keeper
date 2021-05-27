@@ -22,7 +22,6 @@ contract UpkeepRegistrationRequests is Owned {
     uint256 private s_minLINKJuels;
 
     LinkTokenInterface public immutable LINK;
-    uint96 constant private LINK_TOTAL_SUPPLY = 1e27;
 
     struct AutoApprovedConfig {
         bool enabled;
@@ -204,8 +203,6 @@ contract UpkeepRegistrationRequests is Owned {
             approvedInCurrentWindow: 0
         });
         s_keeperRegistry = KeeperRegistryBaseInterface(keeperRegistry);
-        
-        LINK.approve(address(s_keeperRegistry), LINK_TOTAL_SUPPLY);   
     }
 
     /**
@@ -247,6 +244,7 @@ contract UpkeepRegistrationRequests is Owned {
       external 
       onlyLINK() 
       permittedFunctionsForLINK(data) 
+      isValidAmount(amount,data)
     {
         require(amount >= s_minLINKJuels, "Insufficient payment");
         (bool success, ) = address(this).delegatecall(data); // calls register
@@ -285,9 +283,11 @@ contract UpkeepRegistrationRequests is Owned {
     ) 
       private 
     {
+        KeeperRegistryBaseInterface keeperRegistry = s_keeperRegistry;
+
         //call register on keeper Registry
         uint256 upkeepId =
-            s_keeperRegistry.registerUpkeep(
+            keeperRegistry.registerUpkeep(
                 upkeepContract,
                 gasLimit,
                 adminAddress,
@@ -295,7 +295,7 @@ contract UpkeepRegistrationRequests is Owned {
             );
         
         //add transferred funds to the new upkeep 
-        s_keeperRegistry.addFunds(upkeepId,amount);
+        LINK.transferAndCall(address(keeperRegistry), amount, abi.encode(upkeepId));
 
         // emit approve event
         emit RegistrationApproved(hash, name, upkeepId);
@@ -330,4 +330,21 @@ contract UpkeepRegistrationRequests is Owned {
         );
         _;
     }
+
+   /**
+   * @dev Reverts if the actual amount passed does not match the expected amount
+   * @param expected amount that should match the actual amount
+   * @param data bytes
+   */
+  modifier isValidAmount(
+    uint256 expected,
+    bytes memory data
+  ) {
+    uint256 actual;
+    assembly{
+      actual := mload(add(data, 228))
+    }
+    require(expected == actual, "Amount mismatch");
+    _;
+  }
 }
