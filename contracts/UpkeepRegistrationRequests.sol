@@ -60,7 +60,7 @@ contract UpkeepRegistrationRequests is Owned {
     )
     {
         LINK = LinkTokenInterface(LINKAddress);
-        s_minLINKJuels = minimumLINKJuels;
+        setMinLINKJuels(minimumLINKJuels);
     }
 
     //EXTERNAL
@@ -159,7 +159,7 @@ contract UpkeepRegistrationRequests is Owned {
     function setMinLINKJuels(
         uint256 minimumLINKJuels
     )
-      external
+      public
       onlyOwner()
     {
         emit MinLINKChanged(s_minLINKJuels, minimumLINKJuels);
