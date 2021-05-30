@@ -104,8 +104,6 @@ contract UpkeepRegistrationRequests is Owned {
         );
 
         AutoApprovedConfig memory config = s_config;
-
-        // if auto approve is true send registration request to the Keeper Registry contract
         if (config.enabled && _underApprovalLimit(config)) {
             _incrementApprovedCount(config);
 
@@ -280,14 +278,20 @@ contract UpkeepRegistrationRequests is Owned {
     {
         KeeperRegistryBaseInterface keeperRegistry = s_keeperRegistry;
 
+        // register upkeep
         uint256 upkeepId = keeperRegistry.registerUpkeep(
             upkeepContract,
             gasLimit,
             adminAddress,
             checkData
         );
-        //add transferred funds to the new upkeep
-        LINK.transferAndCall(address(keeperRegistry), amount, abi.encode(upkeepId));
+        // fund upkeep
+        bool success = LINK.transferAndCall(
+          address(keeperRegistry),
+          amount,
+          abi.encode(upkeepId)
+        );
+        require(success, "failed to fund upkeep");
 
         emit RegistrationApproved(hash, name, upkeepId);
     }
