@@ -57,8 +57,7 @@ contract UpkeepRegistrationRequests is Owned {
     constructor(
         address LINKAddress,
         uint256 minimumLINKJuels
-    )
-    {
+    ) {
         LINK = LinkTokenInterface(LINKAddress);
         setMinLINKJuels(minimumLINKJuels);
     }
@@ -67,14 +66,14 @@ contract UpkeepRegistrationRequests is Owned {
 
     /**
      * @notice register can only be called through transferAndCall on LINK contract
-     * @param name name of the upkeep to be registered
+     * @param name string of the upkeep to be registered
      * @param encryptedEmail email address of upkeep contact
      * @param upkeepContract address to peform upkeep on
      * @param gasLimit amount of gas to provide the target contract when
      * performing upkeep
      * @param adminAddress address to cancel upkeep and withdraw remaining funds
      * @param checkData data passed to the contract when checking for upkeep
-     * @param amount amount to fund upkeep (specified in Juels)
+     * @param amount quantity of LINK upkeep is funded with (specified in Juels)
      * @param source application sending this request
      */
     function register(
@@ -244,7 +243,7 @@ contract UpkeepRegistrationRequests is Owned {
       external
       onlyLINK()
       permittedFunctionsForLINK(data)
-      isValidAmount(amount,data)
+      isActualAmount(amount, data)
     {
         require(amount >= s_minLINKJuels, "Insufficient payment");
         (bool success, ) = address(this).delegatecall(data); // calls register
@@ -285,18 +284,15 @@ contract UpkeepRegistrationRequests is Owned {
     {
         KeeperRegistryBaseInterface keeperRegistry = s_keeperRegistry;
 
-        //call register on keeper Registry
-        uint256 upkeepId =
-            keeperRegistry.registerUpkeep(
-                upkeepContract,
-                gasLimit,
-                adminAddress,
-                checkData
-            );
+        uint256 upkeepId = keeperRegistry.registerUpkeep(
+            upkeepContract,
+            gasLimit,
+            adminAddress,
+            checkData
+        );
         //add transferred funds to the new upkeep
         LINK.transferAndCall(address(keeperRegistry), amount, abi.encode(upkeepId));
 
-        // emit approve event
         emit RegistrationApproved(hash, name, upkeepId);
     }
 
@@ -334,15 +330,15 @@ contract UpkeepRegistrationRequests is Owned {
    * @param expected amount that should match the actual amount
    * @param data bytes
    */
-  modifier isValidAmount(
+  modifier isActualAmount(
     uint256 expected,
     bytes memory data
   ) {
-    uint256 actual;
-    assembly{
-      actual := mload(add(data, 228))
-    }
-    require(expected == actual, "Amount mismatch");
-    _;
+      uint256 actual;
+      assembly{
+          actual := mload(add(data, 228))
+      }
+      require(expected == actual, "Amount mismatch");
+      _;
   }
 }
