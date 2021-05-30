@@ -106,22 +106,18 @@ contract UpkeepRegistrationRequests is Owned {
         AutoApprovedConfig memory config = s_config;
 
         // if auto approve is true send registration request to the Keeper Registry contract
-        if (config.enabled) {
-            _resetWindowIfRequired(config);
-            if (config.approvedInCurrentWindow < config.allowedPerWindow) {
-                config.approvedInCurrentWindow++;
-                s_config = config;
+        if (config.enabled && _underApprovalLimit(config)) {
+            _incrementApprovedCount(config);
 
-                _approve(
-                    name,
-                    upkeepContract,
-                    gasLimit,
-                    adminAddress,
-                    checkData,
-                    amount,
-                    hash
-                );
-            }
+            _approve(
+                name,
+                upkeepContract,
+                gasLimit,
+                adminAddress,
+                checkData,
+                amount,
+                hash
+            );
         }
     }
 
@@ -294,6 +290,34 @@ contract UpkeepRegistrationRequests is Owned {
         LINK.transferAndCall(address(keeperRegistry), amount, abi.encode(upkeepId));
 
         emit RegistrationApproved(hash, name, upkeepId);
+    }
+
+    /**
+     * @dev determine approval limits and check if in range
+     */
+    function _underApprovalLimit(
+      AutoApprovedConfig memory config
+    )
+      private
+      returns (bool)
+    {
+        _resetWindowIfRequired(config);
+        if (config.approvedInCurrentWindow < config.allowedPerWindow) {
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * @dev record new latest approved count
+     */
+    function _incrementApprovedCount(
+      AutoApprovedConfig memory config
+    )
+      private
+    {
+        config.approvedInCurrentWindow++;
+        s_config = config;
     }
 
     //MODIFIERS
