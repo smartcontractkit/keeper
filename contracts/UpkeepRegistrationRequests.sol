@@ -34,8 +34,6 @@ contract UpkeepRegistrationRequests is Owned {
     AutoApprovedConfig private s_config;
     KeeperRegistryBaseInterface private s_keeperRegistry;
 
-    event MinLINKChanged(uint256 from, uint256 to);
-
     event RegistrationRequested(
         bytes32 indexed hash,
         string name,
@@ -54,12 +52,20 @@ contract UpkeepRegistrationRequests is Owned {
         uint256 indexed upkeepId
     );
 
+    event ConfigChanged(
+        bool enabled,
+        uint32 windowSizeInBlocks,
+        uint16 allowedPerWindow,
+        address keeperRegistry,
+        uint256 minLINKJuels
+    );
+
     constructor(
         address LINKAddress,
         uint256 minimumLINKJuels
     ) {
         LINK = LinkTokenInterface(LINKAddress);
-        setMinLINKJuels(minimumLINKJuels);
+        s_minLINKJuels = minimumLINKJuels;
     }
 
     //EXTERNAL
@@ -146,33 +152,6 @@ contract UpkeepRegistrationRequests is Owned {
     }
 
     /**
-     * @notice owner calls this function to set minimum LINK required to send registration request
-     * @param minimumLINKJuels minimum LINK required to send registration request
-     */
-    function setMinLINKJuels(
-        uint256 minimumLINKJuels
-    )
-      public
-      onlyOwner()
-    {
-        emit MinLINKChanged(s_minLINKJuels, minimumLINKJuels);
-        s_minLINKJuels = minimumLINKJuels;
-    }
-
-    /**
-     * @notice read the minimum LINK required to send registration request
-     */
-    function getMinLINKJuels()
-      external
-      view
-      returns (
-          uint256
-      )
-    {
-        return s_minLINKJuels;
-    }
-
-    /**
      * @notice owner calls this function to set if registration requests should be sent directly to the Keeper Registry
      * @param enabled setting for autoapprove registrations
      * @param windowSizeInBlocks window size defined in number of blocks
@@ -183,7 +162,8 @@ contract UpkeepRegistrationRequests is Owned {
         bool enabled,
         uint32 windowSizeInBlocks,
         uint16 allowedPerWindow,
-        address keeperRegistry
+        address keeperRegistry,
+        uint256 minLINKJuels
     )
       external
       onlyOwner()
@@ -195,7 +175,16 @@ contract UpkeepRegistrationRequests is Owned {
             windowStart: 0,
             approvedInCurrentWindow: 0
         });
+        s_minLINKJuels = minLINKJuels;
         s_keeperRegistry = KeeperRegistryBaseInterface(keeperRegistry);
+
+        emit ConfigChanged(
+          enabled,
+          windowSizeInBlocks,
+          allowedPerWindow,
+          keeperRegistry,
+          minLINKJuels
+        );
     }
 
     /**
@@ -209,6 +198,7 @@ contract UpkeepRegistrationRequests is Owned {
             uint32 windowSizeInBlocks,
             uint16 allowedPerWindow,
             address keeperRegistry,
+            uint256 minLINKJuels,
             uint64 windowStart,
             uint16 approvedInCurrentWindow
         )
@@ -219,6 +209,7 @@ contract UpkeepRegistrationRequests is Owned {
             config.windowSizeInBlocks,
             config.allowedPerWindow,
             address(s_keeperRegistry),
+            s_minLINKJuels,
             config.windowStart,
             config.approvedInCurrentWindow
         );

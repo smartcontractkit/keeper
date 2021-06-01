@@ -40,7 +40,7 @@ contract("UpkeepRegistrationRequests", (accounts) => {
   const maxCheckGas = new BN(20000000);
   const fallbackGasPrice = new BN(200);
   const fallbackLinkPrice = new BN(200000000);
-  const minimumLINKWei = new BN(1000000000000000000n);
+  const minLINKJuels = new BN(1000000000000000000n);
   const amount = new BN(5000000000000000000n);
   const amount1 = new BN(6000000000000000000n);
 
@@ -70,7 +70,7 @@ contract("UpkeepRegistrationRequests", (accounts) => {
 
     registrar = await UpkeepRegistrationRequests.new(
       linkToken.address,
-      minimumLINKWei,
+      minLINKJuels,
       { from: registrarOwner }
     );
 
@@ -107,6 +107,7 @@ contract("UpkeepRegistrationRequests", (accounts) => {
         window_small,
         threshold_big,
         registry.address,
+        minLINKJuels,
         { from: registrarOwner }
       );
 
@@ -145,6 +146,7 @@ contract("UpkeepRegistrationRequests", (accounts) => {
         window_small,
         threshold_big,
         registry.address,
+        minLINKJuels,
         { from: registrarOwner }
       );
 
@@ -211,6 +213,7 @@ contract("UpkeepRegistrationRequests", (accounts) => {
         window_small,
         threshold_big,
         registry.address,
+        minLINKJuels,
         { from: registrarOwner }
       );
 
@@ -274,6 +277,7 @@ contract("UpkeepRegistrationRequests", (accounts) => {
         window_big,
         threshold_small,
         registry.address,
+        minLINKJuels,
         { from: registrarOwner }
       );
 
