@@ -2,6 +2,7 @@
 
 pragma solidity 0.7.6;
 
+import "@chainlink/contracts/src/v0.7/interfaces/LinkTokenInterface.sol";
 import "./vendor/Owned.sol";
 import "./KeeperRegistryInterface.sol";
 
@@ -20,7 +21,7 @@ contract UpkeepRegistrationRequests is Owned {
 
     uint256 private s_minLINKJuels;
 
-    address public immutable LINK_ADDRESS;
+    LinkTokenInterface public immutable LINK;
 
     struct AutoApprovedConfig {
         bool enabled;
@@ -33,8 +34,6 @@ contract UpkeepRegistrationRequests is Owned {
     AutoApprovedConfig private s_config;
     KeeperRegistryBaseInterface private s_keeperRegistry;
 
-    event MinLINKChanged(uint256 from, uint256 to);
-
     event RegistrationRequested(
         bytes32 indexed hash,
         string name,
@@ -43,6 +42,7 @@ contract UpkeepRegistrationRequests is Owned {
         uint32 gasLimit,
         address adminAddress,
         bytes checkData,
+        uint96 amount,
         uint8 indexed source
     );
 
@@ -52,12 +52,19 @@ contract UpkeepRegistrationRequests is Owned {
         uint256 indexed upkeepId
     );
 
+    event ConfigChanged(
+        bool enabled,
+        uint32 windowSizeInBlocks,
+        uint16 allowedPerWindow,
+        address keeperRegistry,
+        uint256 minLINKJuels
+    );
+
     constructor(
-        address LINKAddress, 
+        address LINKAddress,
         uint256 minimumLINKJuels
-    ) 
-    {
-        LINK_ADDRESS = LINKAddress;
+    ) {
+        LINK = LinkTokenInterface(LINKAddress);
         s_minLINKJuels = minimumLINKJuels;
     }
 
@@ -65,13 +72,14 @@ contract UpkeepRegistrationRequests is Owned {
 
     /**
      * @notice register can only be called through transferAndCall on LINK contract
-     * @param name name of the upkeep to be registered
-     * @param encryptedEmail Amount of LINK sent (specified in Juels)
+     * @param name string of the upkeep to be registered
+     * @param encryptedEmail email address of upkeep contact
      * @param upkeepContract address to peform upkeep on
      * @param gasLimit amount of gas to provide the target contract when
      * performing upkeep
      * @param adminAddress address to cancel upkeep and withdraw remaining funds
      * @param checkData data passed to the contract when checking for upkeep
+     * @param amount quantity of LINK upkeep is funded with (specified in Juels)
      * @param source application sending this request
      */
     function register(
@@ -81,10 +89,11 @@ contract UpkeepRegistrationRequests is Owned {
         uint32 gasLimit,
         address adminAddress,
         bytes calldata checkData,
+        uint96 amount,
         uint8 source
-    ) 
-      external 
-      onlyLINK() 
+    )
+      external
+      onlyLINK()
     {
         bytes32 hash = keccak256(msg.data);
 
@@ -96,27 +105,23 @@ contract UpkeepRegistrationRequests is Owned {
             gasLimit,
             adminAddress,
             checkData,
+            amount,
             source
         );
 
         AutoApprovedConfig memory config = s_config;
+        if (config.enabled && _underApprovalLimit(config)) {
+            _incrementApprovedCount(config);
 
-        // if auto approve is true send registration request to the Keeper Registry contract
-        if (config.enabled) {
-            _resetWindowIfRequired(config);
-            if (config.approvedInCurrentWindow < config.allowedPerWindow) {
-                config.approvedInCurrentWindow++;
-                s_config = config;
-
-                _approve(
-                    name,
-                    upkeepContract,
-                    gasLimit,
-                    adminAddress,
-                    checkData,
-                    hash
-                );
-            }
+            _approve(
+                name,
+                upkeepContract,
+                gasLimit,
+                adminAddress,
+                checkData,
+                amount,
+                hash
+            );
         }
     }
 
@@ -129,10 +134,11 @@ contract UpkeepRegistrationRequests is Owned {
         uint32 gasLimit,
         address adminAddress,
         bytes calldata checkData,
+        uint96 amount,
         bytes32 hash
-    ) 
-      external 
-      onlyOwner() 
+    )
+      external
+      onlyOwner()
     {
         _approve(
             name,
@@ -140,35 +146,9 @@ contract UpkeepRegistrationRequests is Owned {
             gasLimit,
             adminAddress,
             checkData,
+            amount,
             hash
-        );    
-    }
-
-    /**
-     * @notice owner calls this function to set minimum LINK required to send registration request
-     * @param minimumLINKJuels minimum LINK required to send registration request
-     */
-    function setMinLINKJuels(
-        uint256 minimumLINKJuels
-    ) 
-      external 
-      onlyOwner() 
-    {
-        emit MinLINKChanged(s_minLINKJuels, minimumLINKJuels);
-        s_minLINKJuels = minimumLINKJuels;
-    }
-
-    /**
-     * @notice read the minimum LINK required to send registration request
-     */
-    function getMinLINKJuels() 
-      external 
-      view 
-      returns (
-          uint256
-      )
-    {
-        return s_minLINKJuels;
+        );
     }
 
     /**
@@ -182,10 +162,11 @@ contract UpkeepRegistrationRequests is Owned {
         bool enabled,
         uint32 windowSizeInBlocks,
         uint16 allowedPerWindow,
-        address keeperRegistry
+        address keeperRegistry,
+        uint256 minLINKJuels
     )
-      external 
-      onlyOwner() 
+      external
+      onlyOwner()
     {
         s_config = AutoApprovedConfig({
             enabled: enabled,
@@ -194,7 +175,16 @@ contract UpkeepRegistrationRequests is Owned {
             windowStart: 0,
             approvedInCurrentWindow: 0
         });
+        s_minLINKJuels = minLINKJuels;
         s_keeperRegistry = KeeperRegistryBaseInterface(keeperRegistry);
+
+        emit ConfigChanged(
+          enabled,
+          windowSizeInBlocks,
+          allowedPerWindow,
+          keeperRegistry,
+          minLINKJuels
+        );
     }
 
     /**
@@ -208,6 +198,7 @@ contract UpkeepRegistrationRequests is Owned {
             uint32 windowSizeInBlocks,
             uint16 allowedPerWindow,
             address keeperRegistry,
+            uint256 minLINKJuels,
             uint64 windowStart,
             uint16 approvedInCurrentWindow
         )
@@ -218,6 +209,7 @@ contract UpkeepRegistrationRequests is Owned {
             config.windowSizeInBlocks,
             config.allowedPerWindow,
             address(s_keeperRegistry),
+            s_minLINKJuels,
             config.windowStart,
             config.approvedInCurrentWindow
         );
@@ -232,10 +224,11 @@ contract UpkeepRegistrationRequests is Owned {
         address, /* sender */
         uint256 amount,
         bytes calldata data
-    ) 
-      external 
-      onlyLINK() 
-      permittedFunctionsForLINK(data) 
+    )
+      external
+      onlyLINK()
+      permittedFunctionsForLINK(data)
+      isActualAmount(amount, data)
     {
         require(amount >= s_minLINKJuels, "Insufficient payment");
         (bool success, ) = address(this).delegatecall(data); // calls register
@@ -249,8 +242,8 @@ contract UpkeepRegistrationRequests is Owned {
      */
     function _resetWindowIfRequired(
         AutoApprovedConfig memory config
-    ) 
-      private 
+    )
+      private
     {
         uint64 blocksPassed = uint64(block.number - config.windowStart);
         if (blocksPassed >= config.windowSizeInBlocks) {
@@ -269,21 +262,57 @@ contract UpkeepRegistrationRequests is Owned {
         uint32 gasLimit,
         address adminAddress,
         bytes calldata checkData,
+        uint96 amount,
         bytes32 hash
-    ) 
-      private 
+    )
+      private
     {
-        //call register on keeper Registry
-        uint256 upkeepId =
-            s_keeperRegistry.registerUpkeep(
-                upkeepContract,
-                gasLimit,
-                adminAddress,
-                checkData
-            );
+        KeeperRegistryBaseInterface keeperRegistry = s_keeperRegistry;
 
-        // emit approve event
+        // register upkeep
+        uint256 upkeepId = keeperRegistry.registerUpkeep(
+            upkeepContract,
+            gasLimit,
+            adminAddress,
+            checkData
+        );
+        // fund upkeep
+        bool success = LINK.transferAndCall(
+          address(keeperRegistry),
+          amount,
+          abi.encode(upkeepId)
+        );
+        require(success, "failed to fund upkeep");
+
         emit RegistrationApproved(hash, name, upkeepId);
+    }
+
+    /**
+     * @dev determine approval limits and check if in range
+     */
+    function _underApprovalLimit(
+      AutoApprovedConfig memory config
+    )
+      private
+      returns (bool)
+    {
+        _resetWindowIfRequired(config);
+        if (config.approvedInCurrentWindow < config.allowedPerWindow) {
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * @dev record new latest approved count
+     */
+    function _incrementApprovedCount(
+      AutoApprovedConfig memory config
+    )
+      private
+    {
+        config.approvedInCurrentWindow++;
+        s_config = config;
     }
 
     //MODIFIERS
@@ -292,7 +321,7 @@ contract UpkeepRegistrationRequests is Owned {
      * @dev Reverts if not sent from the LINK token
      */
     modifier onlyLINK() {
-        require(msg.sender == LINK_ADDRESS, "Must use LINK token");
+        require(msg.sender == address(LINK), "Must use LINK token");
         _;
     }
 
@@ -302,8 +331,7 @@ contract UpkeepRegistrationRequests is Owned {
      */
     modifier permittedFunctionsForLINK(
         bytes memory _data
-    ) 
-    {
+    ) {
         bytes4 funcSelector;
         assembly {
             // solhint-disable-next-line avoid-low-level-calls
@@ -315,4 +343,21 @@ contract UpkeepRegistrationRequests is Owned {
         );
         _;
     }
+
+   /**
+   * @dev Reverts if the actual amount passed does not match the expected amount
+   * @param expected amount that should match the actual amount
+   * @param data bytes
+   */
+  modifier isActualAmount(
+    uint256 expected,
+    bytes memory data
+  ) {
+      uint256 actual;
+      assembly{
+          actual := mload(add(data, 228))
+      }
+      require(expected == actual, "Amount mismatch");
+      _;
+  }
 }

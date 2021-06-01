@@ -40,7 +40,10 @@ contract("UpkeepRegistrationRequests", (accounts) => {
   const maxCheckGas = new BN(20000000);
   const fallbackGasPrice = new BN(200);
   const fallbackLinkPrice = new BN(200000000);
-  const minimumLINKWei = new BN(1000000000000000000n);
+  const minLINKJuels = new BN(1000000000000000000n);
+  const amount = new BN(5000000000000000000n);
+  const amount1 = new BN(6000000000000000000n);
+
   let linkToken, linkEthFeed, gasPriceFeed, registry, mock;
 
   beforeEach(async () => {
@@ -67,7 +70,7 @@ contract("UpkeepRegistrationRequests", (accounts) => {
 
     registrar = await UpkeepRegistrationRequests.new(
       linkToken.address,
-      minimumLINKWei,
+      minLINKJuels,
       { from: registrarOwner }
     );
 
@@ -86,11 +89,51 @@ contract("UpkeepRegistrationRequests", (accounts) => {
           executeGas,
           admin,
           emptyBytes,
+          amount,
           source,
           { from: someAddress }
         ),
         "Must use LINK token"
       );
+    });
+
+    it("reverts if the amount passed in data mismatches actual amount sent", async () => {
+      //get current upkeep count
+      const upkeepCount = await registry.getUpkeepCount();
+
+      //set auto approve ON with high threshold limits
+      await registrar.setRegistrationConfig(
+        true,
+        window_small,
+        threshold_big,
+        registry.address,
+        minLINKJuels,
+        { from: registrarOwner }
+      );
+
+      //register with auto approve ON
+      let abiEncodedBytes = registrar.contract.methods
+        .register(
+          upkeepName,
+          emptyBytes,
+          mock.address,
+          executeGas,
+          admin,
+          emptyBytes,
+          amount1,
+          source
+        )
+        .encodeABI();
+
+      await expectRevert(
+        linkToken.transferAndCall(
+          registrar.address,
+          amount,
+          abiEncodedBytes
+        ),
+        "Amount mismatch"
+      );
+
     });
 
     it("Auto Approve ON - registers an upkeep on KeeperRegistry instantly and emits both RegistrationRequested and RegistrationApproved events", async () => {
@@ -103,11 +146,11 @@ contract("UpkeepRegistrationRequests", (accounts) => {
         window_small,
         threshold_big,
         registry.address,
+        minLINKJuels,
         { from: registrarOwner }
       );
 
       //register with auto approve ON
-      const amount = ether("1");
       let abiEncodedBytes = registrar.contract.methods
         .register(
           upkeepName,
@@ -116,6 +159,7 @@ contract("UpkeepRegistrationRequests", (accounts) => {
           executeGas,
           admin,
           emptyBytes,
+          amount,
           source
         )
         .encodeABI();
@@ -130,6 +174,7 @@ contract("UpkeepRegistrationRequests", (accounts) => {
       assert.equal(newupkeep.target, mock.address);
       assert.equal(newupkeep.admin, admin);
       assert.equal(newupkeep.checkData, emptyBytes);
+      assert.equal(newupkeep.balance.toString(), amount.toString());
       assert.isTrue(newupkeep.executeGas.eq(executeGas));
 
       //confirm if RegistrationRequested and RegistrationApproved event are received
@@ -137,7 +182,7 @@ contract("UpkeepRegistrationRequests", (accounts) => {
         return (
           l.topics[0] ==
           web3.utils.keccak256(
-            "RegistrationRequested(bytes32,string,bytes,address,uint32,address,bytes,uint8)"
+            "RegistrationRequested(bytes32,string,bytes,address,uint32,address,bytes,uint96,uint8)"
           )
         );
       });
@@ -168,11 +213,11 @@ contract("UpkeepRegistrationRequests", (accounts) => {
         window_small,
         threshold_big,
         registry.address,
+        minLINKJuels,
         { from: registrarOwner }
       );
 
       //register with auto approve OFF
-      const amount = ether("1");
       let abiEncodedBytes = registrar.contract.methods
         .register(
           upkeepName,
@@ -181,6 +226,7 @@ contract("UpkeepRegistrationRequests", (accounts) => {
           executeGas,
           admin,
           emptyBytes,
+          amount,
           source
         )
         .encodeABI();
@@ -200,7 +246,7 @@ contract("UpkeepRegistrationRequests", (accounts) => {
         return (
           l.topics[0] ==
           web3.utils.keccak256(
-            "RegistrationRequested(bytes32,string,bytes,address,uint32,address,bytes,uint8)"
+            "RegistrationRequested(bytes32,string,bytes,address,uint32,address,bytes,uint96,uint8)"
           )
         );
       });
@@ -231,10 +277,10 @@ contract("UpkeepRegistrationRequests", (accounts) => {
         window_big,
         threshold_small,
         registry.address,
+        minLINKJuels,
         { from: registrarOwner }
       );
 
-      const amount = ether("1");
       let abiEncodedBytes = registrar.contract.methods
         .register(
           upkeepName,
@@ -243,6 +289,7 @@ contract("UpkeepRegistrationRequests", (accounts) => {
           executeGas,
           admin,
           emptyBytes,
+          amount,
           source
         )
         .encodeABI();
