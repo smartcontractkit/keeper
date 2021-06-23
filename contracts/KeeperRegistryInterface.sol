@@ -54,8 +54,8 @@ interface KeeperRegistryBaseInterface {
       uint32 checkGasLimit,
       uint24 stalenessSeconds,
       uint16 gasCeilingMultiplier,
-      int256 fallbackGasPrice,
-      int256 fallbackLinkPrice
+      uint256 fallbackGasPrice,
+      uint256 fallbackLinkPrice
     );
 }
 
@@ -90,7 +90,7 @@ interface KeeperRegistryExecutableInterface is KeeperRegistryBaseInterface {
       bytes memory performData,
       uint256 maxLinkPayment,
       uint256 gasLimit,
-      int256 gasWei,
-      int256 linkEth
+      uint256 adjustedGasWei,
+      uint256 linkEth
     );
 }

@@ -52,8 +52,8 @@ contract KeeperRegistry is
   mapping(address => address) private s_proposedPayee;
   mapping(uint256 => bytes) private s_checkData;
   Config private s_config;
-  int256 private s_fallbackGasPrice;  // not in config object for gas savings
-  int256 private s_fallbackLinkPrice; // not in config object for gas savings
+  uint256 private s_fallbackGasPrice;  // not in config object for gas savings
+  uint256 private s_fallbackLinkPrice; // not in config object for gas savings
 
   LinkTokenInterface public immutable LINK;
   AggregatorV3Interface public immutable LINK_ETH_FEED;
@@ -90,8 +90,8 @@ contract KeeperRegistry is
     bytes performData;
     uint256 maxLinkPayment;
     uint256 gasLimit;
-    int256 adjustedGasWei;
-    int256 linkEth;
+    uint256 adjustedGasWei;
+    uint256 linkEth;
   }
 
   event UpkeepRegistered(
@@ -126,8 +126,8 @@ contract KeeperRegistry is
     uint32 checkGasLimit,
     uint24 stalenessSeconds,
     uint16 gasCeilingMultiplier,
-    int256 fallbackGasPrice,
-    int256 fallbackLinkPrice
+    uint256 fallbackGasPrice,
+    uint256 fallbackLinkPrice
   );
   event KeepersUpdated(
     address[] keepers,
@@ -178,8 +178,8 @@ contract KeeperRegistry is
     uint32 checkGasLimit,
     uint24 stalenessSeconds,
     uint16 gasCeilingMultiplier,
-    int256 fallbackGasPrice,
-    int256 fallbackLinkPrice
+    uint256 fallbackGasPrice,
+    uint256 fallbackLinkPrice
   ) {
     LINK = LinkTokenInterface(link);
     LINK_ETH_FEED = AggregatorV3Interface(linkEthFeed);
@@ -261,8 +261,8 @@ contract KeeperRegistry is
       bytes memory performData,
       uint256 maxLinkPayment,
       uint256 gasLimit,
-      int256 adjustedGasWei,
-      int256 linkEth
+      uint256 adjustedGasWei,
+      uint256 linkEth
     )
   {
     bytes memory callData = abi.encodeWithSelector(CHECK_SELECTOR, s_checkData[id]);
@@ -529,8 +529,8 @@ contract KeeperRegistry is
     uint32 checkGasLimit,
     uint24 stalenessSeconds,
     uint16 gasCeilingMultiplier,
-    int256 fallbackGasPrice,
-    int256 fallbackLinkPrice
+    uint256 fallbackGasPrice,
+    uint256 fallbackLinkPrice
   )
     onlyOwner()
     public
@@ -725,8 +725,8 @@ contract KeeperRegistry is
       uint32 checkGasLimit,
       uint24 stalenessSeconds,
       uint16 gasCeilingMultiplier,
-      int256 fallbackGasPrice,
-      int256 fallbackLinkPrice
+      uint256 fallbackGasPrice,
+      uint256 fallbackLinkPrice
     )
   {
     Config memory config = s_config;
@@ -754,20 +754,25 @@ contract KeeperRegistry is
     private
     view
     returns (
-      int256 gasWei,
-      int256 linkEth
+      uint256 gasWei,
+      uint256 linkEth
     )
   {
     uint32 stalenessSeconds = s_config.stalenessSeconds;
     bool staleFallback = stalenessSeconds > 0;
     uint256 timestamp;
-    (,gasWei,,timestamp,) = FAST_GAS_FEED.latestRoundData();
-    if (staleFallback && stalenessSeconds < block.timestamp - timestamp) {
+    int256 feedValue;
+    (,feedValue,,timestamp,) = FAST_GAS_FEED.latestRoundData();
+    if (staleFallback && stalenessSeconds < block.timestamp - timestamp || feedValue < 0) {
       gasWei = s_fallbackGasPrice;
+    } else {
+      gasWei = uint256(feedValue);
     }
-    (,linkEth,,timestamp,) = LINK_ETH_FEED.latestRoundData();
-    if (staleFallback && stalenessSeconds < block.timestamp - timestamp) {
+    (,feedValue,,timestamp,) = LINK_ETH_FEED.latestRoundData();
+    if (staleFallback && stalenessSeconds < block.timestamp - timestamp || feedValue < 0) {
       linkEth = s_fallbackLinkPrice;
+    } else {
+      linkEth = uint256(feedValue);
     }
     return (gasWei, linkEth);
   }
@@ -777,8 +782,8 @@ contract KeeperRegistry is
    */
   function calculatePaymentAmount(
     uint256 gasLimit,
-    int256 gasWei,
-    int256 linkEth
+    uint256 gasWei,
+    uint256 linkEth
   )
     private
     view
@@ -786,9 +791,9 @@ contract KeeperRegistry is
       uint96 payment
     )
   {
-    uint256 weiForGas = uint256(gasWei).mul(gasLimit.add(REGISTRY_GAS_OVERHEAD));
+    uint256 weiForGas = gasWei.mul(gasLimit.add(REGISTRY_GAS_OVERHEAD));
     uint256 premium = PPB_BASE.add(s_config.paymentPremiumPPB);
-    uint256 total = weiForGas.mul(1e9).mul(premium).div(uint256(linkEth));
+    uint256 total = weiForGas.mul(1e9).mul(premium).div(linkEth);
     require(total <= LINK_TOTAL_SUPPLY, "payment greater than all LINK");
     return uint96(total); // LINK_TOTAL_SUPPLY < UINT96_MAX
   }
@@ -880,17 +885,16 @@ contract KeeperRegistry is
    * @dev adjusts the gas price to min(ceiling, tx.gasprice) or just uses the ceiling if tx.gasprice is disabled
    */
   function adjustGasPrice(
-    int256 gasWei,
+    uint256 gasWei,
     bool useTxGasPrice
   )
     private
     view
-    returns(int256 adjustedPrice)
+    returns(uint256 adjustedPrice)
   {
     adjustedPrice = gasWei.mul(s_config.gasCeilingMultiplier);
-    int256 gasPrice = int256(tx.gasprice);
-    if (useTxGasPrice && gasPrice < adjustedPrice) {
-      adjustedPrice = gasPrice;
+    if (useTxGasPrice && tx.gasprice < adjustedPrice) {
+      adjustedPrice = tx.gasprice;
     }
   }
 
@@ -908,8 +912,8 @@ contract KeeperRegistry is
     returns(PerformParams memory)
   {
     uint256 gasLimit = s_upkeep[id].executeGas;
-    (int256 gasWei, int256 linkEth) = getFeedData();
-    int256 adjustedGasWei = adjustGasPrice(gasWei, useTxGasPrice);
+    (uint256 gasWei, uint256 linkEth) = getFeedData();
+    uint256 adjustedGasWei = adjustGasPrice(gasWei, useTxGasPrice);
     uint96 maxLinkPayment = calculatePaymentAmount(gasLimit, adjustedGasWei, linkEth);
 
     return PerformParams({
