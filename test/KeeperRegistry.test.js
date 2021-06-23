@@ -5,6 +5,12 @@ const { LinkToken } = require('@chainlink/contracts/truffle/v0.4/LinkToken')
 const { MockV3Aggregator } = require('@chainlink/contracts/truffle/v0.6/MockV3Aggregator')
 const { BN, constants, ether, expectEvent, expectRevert, time } = require('@openzeppelin/test-helpers')
 
+// -----------------------------------------------------------------------------------------------
+// DEV: these *should* match the perform/check gas overhead values in the contract and on the node
+const PERFORM_GAS_OVERHEAD = new BN('90000')
+const CHECK_GAS_OVERHEAD = new BN('170000')
+// -----------------------------------------------------------------------------------------------
+
 contract('KeeperRegistry', (accounts) => {
   const owner = accounts[0]
   const keeper1 = accounts[1]
@@ -381,6 +387,13 @@ contract('KeeperRegistry', (accounts) => {
           assert.isTrue(response.adjustedGasWei.eq(gasWei.mul(newGasMultiplier)))
           assert.isTrue(response.maxLinkPayment.eq(linkForGas(executeGas).mul(newGasMultiplier)))
         })
+
+        it('has a large enough gas overhead to cover upkeeps that use all their gas', async () => {
+          await mock.setCheckGasToBurn(maxCheckGas)
+          await mock.setPerformGasToBurn(executeGas)
+          const gas = maxCheckGas.add(executeGas).add(PERFORM_GAS_OVERHEAD).add(CHECK_GAS_OVERHEAD)
+          await registry.checkUpkeep.call(id, keeper1, { from: zeroAddress, gas: gas })
+        })
       })
     })
   })
@@ -613,6 +626,19 @@ contract('KeeperRegistry', (accounts) => {
           'keepers must take turns'
         )
         await registry.performUpkeep(id, "0x", { from: keeper1 })
+      })
+
+      it('has a large enough gas overhead to cover upkeeps that use all their gas', async () => {
+        await mock.setPerformGasToBurn(executeGas)
+        await mock.setCanPerform(true)
+        const gas = executeGas.add(PERFORM_GAS_OVERHEAD)
+        const performData = "0xc0ffeec0ffee"
+        const { receipt } = await registry.performUpkeep(id, performData, { from: keeper1, gas: gas })
+        expectEvent(receipt, 'UpkeepPerformed', {
+          success: true,
+          from: keeper1,
+          performData: performData
+        })
       })
     })
   })
