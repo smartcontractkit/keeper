@@ -270,7 +270,12 @@ contract KeeperRegistry is
       bool success,
       bytes memory result
     ) = s_upkeep[id].target.call{gas: s_config.checkGasLimit}(callData);
-    require(success, "call to check target failed");
+
+    if (!success) {
+      string memory upkeepRevertReason = getRevertMsg(result);
+      string memory reason = string(abi.encodePacked("call to check target failed: ", upkeepRevertReason));
+      revert(reason);
+    }
 
     (
       success,
@@ -927,6 +932,16 @@ contract KeeperRegistry is
     });
   }
 
+  /**
+   * @dev extracts a revert reason from a call result payload
+   */
+  function getRevertMsg(bytes memory _payload) private pure returns (string memory) {
+    if (_payload.length < 68) return 'transaction reverted silently';
+    assembly {
+        _payload := add(_payload, 0x04)
+    }
+    return abi.decode(_payload, (string));
+}
 
   // MODIFIERS
 
