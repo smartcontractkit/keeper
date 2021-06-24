@@ -5,6 +5,12 @@ const { LinkToken } = require('@chainlink/contracts/truffle/v0.4/LinkToken')
 const { MockV3Aggregator } = require('@chainlink/contracts/truffle/v0.6/MockV3Aggregator')
 const { BN, constants, ether, expectEvent, expectRevert, time } = require('@openzeppelin/test-helpers')
 
+// -----------------------------------------------------------------------------------------------
+// DEV: these *should* match the perform/check gas overhead values in the contract and on the node
+const PERFORM_GAS_OVERHEAD = new BN('90000')
+const CHECK_GAS_OVERHEAD = new BN('170000')
+// -----------------------------------------------------------------------------------------------
+
 contract('KeeperRegistry', (accounts) => {
   const owner = accounts[0]
   const keeper1 = accounts[1]
@@ -258,6 +264,8 @@ contract('KeeperRegistry', (accounts) => {
 
   describe('#checkUpkeep', () => {
     it('reverts if the upkeep is not funded', async () => {
+      await mock.setCanPerform(true)
+      await mock.setCanCheck(true)
       await expectRevert(
         registry.checkUpkeep.call(id, keeper1, {from: zeroAddress}),
         "insufficient funds"
@@ -362,12 +370,29 @@ contract('KeeperRegistry', (accounts) => {
         })
 
         it('returns true with pricing info if the target can execute', async () => {
+          const newGasMultiplier = new BN(10)
+          await registry.setConfig(
+            paymentPremiumPPB,
+            blockCountPerTurn,
+            maxCheckGas,
+            stalenessSeconds,
+            newGasMultiplier,
+            fallbackGasPrice,
+            fallbackLinkPrice,
+            { from: owner }
+          )
           const response = await registry.checkUpkeep.call(id, keeper1, {from: zeroAddress})
-
           assert.isTrue(response.gasLimit.eq(executeGas))
           assert.isTrue(response.linkEth.eq(linkEth))
-          assert.isTrue(response.gasWei.eq(gasWei))
-          assert.isTrue(response.maxLinkPayment.eq(linkForGas(executeGas)))
+          assert.isTrue(response.adjustedGasWei.eq(gasWei.mul(newGasMultiplier)))
+          assert.isTrue(response.maxLinkPayment.eq(linkForGas(executeGas).mul(newGasMultiplier)))
+        })
+
+        it('has a large enough gas overhead to cover upkeeps that use all their gas', async () => {
+          await mock.setCheckGasToBurn(maxCheckGas)
+          await mock.setPerformGasToBurn(executeGas)
+          const gas = maxCheckGas.add(executeGas).add(PERFORM_GAS_OVERHEAD).add(CHECK_GAS_OVERHEAD)
+          await registry.checkUpkeep.call(id, keeper1, { from: zeroAddress, gas: gas })
         })
       })
     })
@@ -377,7 +402,7 @@ contract('KeeperRegistry', (accounts) => {
     it('reverts if the registration is not funded', async () => {
       await expectRevert(
         registry.performUpkeep(id, "0x", { from: keeper2 }),
-        'insufficient payment'
+        'insufficient funds'
       )
     })
 
@@ -601,6 +626,19 @@ contract('KeeperRegistry', (accounts) => {
           'keepers must take turns'
         )
         await registry.performUpkeep(id, "0x", { from: keeper1 })
+      })
+
+      it('has a large enough gas overhead to cover upkeeps that use all their gas', async () => {
+        await mock.setPerformGasToBurn(executeGas)
+        await mock.setCanPerform(true)
+        const gas = executeGas.add(PERFORM_GAS_OVERHEAD)
+        const performData = "0xc0ffeec0ffee"
+        const { receipt } = await registry.performUpkeep(id, performData, { from: keeper1, gas: gas })
+        expectEvent(receipt, 'UpkeepPerformed', {
+          success: true,
+          from: keeper1,
+          performData: performData
+        })
       })
     })
   })
@@ -1144,6 +1182,70 @@ contract('KeeperRegistry', (accounts) => {
       await registry.unpause({from: owner})
 
       assert.isFalse(await registry.paused())
+    })
+  })
+
+  describe('#checkUpkeep / #performUpkeep', () => {
+    const performData = "0xc0ffeec0ffee"
+    const multiplier = new BN(10)
+    const callGasPrice = 1
+
+    it('uses the same minimum balance calculation', async () => {
+      await registry.setConfig(
+        paymentPremiumPPB,
+        blockCountPerTurn,
+        maxCheckGas,
+        stalenessSeconds,
+        multiplier,
+        fallbackGasPrice,
+        fallbackLinkPrice,
+        { from: owner }
+      )
+      await linkToken.approve(registry.address, ether('100'), { from: owner })
+
+      // max payment is .75 eth for this config - this spread will yield some eligible and some ineligible
+      const balances = ['0', '0.01', '0.1', '0.4', '0.7', '0.8', '1', '2', '10']
+      let revertCount = 0
+
+      for (let idx = 0; idx < balances.length; idx++) {
+        const balance = balances[idx];
+        const { receipt } = await registry.registerUpkeep(
+          mock.address,
+          executeGas,
+          admin,
+          emptyBytes,
+          { from: owner }
+        )
+        const upkeepID = receipt.logs[0].args.id
+        await mock.setCanCheck(true)
+        await mock.setCanPerform(true)
+        await registry.addFunds(upkeepID, ether(balance), { from: owner })
+
+        try {
+          // try checkUpkeep
+          await registry.checkUpkeep.call(upkeepID, keeper1, {from: zeroAddress, gasPrice: callGasPrice})
+        } catch (err) {
+        // if checkUpkeep reverts, we expect performUpkeep to revert as well
+          revertCount++;
+          await expectRevert(
+            registry.performUpkeep(upkeepID, performData, { from: keeper1, gas: extraGas }),
+            'insufficient funds'
+          )
+          continue
+        }
+        // if checkUpkeep succeeds, we expect performUpkeep to succeed as well
+        try {
+          await registry.performUpkeep(upkeepID, performData, { from: keeper1, gas: extraGas })
+        } catch (err) {
+          assert(false, `expected performUpkeep to have succeeded with balance ${balance} ETH, but it did not. err: ${err}`)
+        }
+      }
+
+      // make sure _both_ scenarios are covered - future-proofs the test against contract / config changes
+      assert.isTrue(
+        revertCount > 0 && revertCount < balances.length,
+        `expected 0 < revertCount < ${balances.length}, but revertCount was ${revertCount}`
+      )
     })
   })
 })
