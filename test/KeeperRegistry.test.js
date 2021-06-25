@@ -1248,4 +1248,22 @@ contract('KeeperRegistry', (accounts) => {
       )
     })
   })
+
+  describe('#getMinBalanceForUpkeep / #checkUpkeep', () => {
+    it('calculates the minimum balance appropriately', async () => {
+      const oneWei = new BN('1')
+      await linkToken.approve(registry.address, ether('100'), { from: keeper1 })
+      await mock.setCanCheck(true)
+      await mock.setCanPerform(true)
+      const minBalance = await registry.getMinBalanceForUpkeep(id)
+      const tooLow = minBalance.sub(oneWei)
+      await registry.addFunds(id, tooLow, { from: keeper1 })
+      await expectRevert(
+        registry.checkUpkeep.call(id, keeper1, {from: zeroAddress}),
+        'insufficient funds'
+      )
+      await registry.addFunds(id, oneWei, { from: keeper1 })
+      await registry.checkUpkeep.call(id, keeper1, {from: zeroAddress})
+    })
+  })
 })
