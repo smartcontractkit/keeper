@@ -746,6 +746,38 @@ contract KeeperRegistry is
     );
   }
 
+  /**
+   * @notice calculates the minimum balance required for an upkeep to remain eligible
+   */
+  function getMinBalanceForUpkeep(
+    uint256 id
+  )
+    external
+    view
+    returns (
+      uint96 minBalance
+    )
+  {
+    return getMaxPaymentForGas(s_upkeep[id].executeGas);
+  }
+
+  /**
+   * @notice calculates the maximum payment for a given gas limit
+   */
+  function getMaxPaymentForGas(
+    uint256 gasLimit
+  )
+    public
+    view
+    returns (
+      uint96 maxPayment
+    )
+  {
+    (uint256 gasWei, uint256 linkEth) = getFeedData();
+    uint256 adjustedGasWei = adjustGasPrice(gasWei, false);
+    return calculatePaymentAmount(gasLimit, adjustedGasWei, linkEth);
+  }
+
 
   // PRIVATE
 
@@ -941,7 +973,7 @@ contract KeeperRegistry is
         _payload := add(_payload, 0x04)
     }
     return abi.decode(_payload, (string));
-}
+  }
 
   // MODIFIERS
 
