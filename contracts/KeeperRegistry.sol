@@ -35,8 +35,7 @@ contract KeeperRegistry is
   address constant private IGNORE_ADDRESS = 0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF;
   bytes4 constant private CHECK_SELECTOR = KeeperCompatibleInterface.checkUpkeep.selector;
   bytes4 constant private PERFORM_SELECTOR = KeeperCompatibleInterface.performUpkeep.selector;
-  uint256 constant private CALL_GAS_MAX = 2_500_000;
-  uint256 constant private CALL_GAS_MIN = 2_300;
+  uint256 constant private EXECUTE_GAS_MIN = 2_300;
   uint256 constant private CANCELATION_DELAY = 50;
   uint256 constant private CUSHION = 5_000;
   uint256 constant private REGISTRY_GAS_OVERHEAD = 80_000;
@@ -82,6 +81,7 @@ contract KeeperRegistry is
     uint32 checkGasLimit;
     uint24 stalenessSeconds;
     uint16 gasCeilingMultiplier;
+    uint32 executeGasMax;
   }
 
   struct PerformParams {
@@ -126,6 +126,7 @@ contract KeeperRegistry is
     uint32 checkGasLimit,
     uint24 stalenessSeconds,
     uint16 gasCeilingMultiplier,
+    uint32 executeGasMax,
     uint256 fallbackGasPrice,
     uint256 fallbackLinkPrice
   );
@@ -178,6 +179,7 @@ contract KeeperRegistry is
     uint32 checkGasLimit,
     uint24 stalenessSeconds,
     uint16 gasCeilingMultiplier,
+    uint32 executeGasMax,
     uint256 fallbackGasPrice,
     uint256 fallbackLinkPrice
   ) {
@@ -191,6 +193,7 @@ contract KeeperRegistry is
       checkGasLimit,
       stalenessSeconds,
       gasCeilingMultiplier,
+      executeGasMax,
       fallbackGasPrice,
       fallbackLinkPrice
     );
@@ -220,9 +223,10 @@ contract KeeperRegistry is
       uint256 id
     )
   {
+    Config memory config = s_config;
     require(target.isContract(), "target is not a contract");
-    require(gasLimit >= CALL_GAS_MIN, "min gas is 2300");
-    require(gasLimit <= CALL_GAS_MAX, "max gas is 2500000");
+    require(gasLimit >= EXECUTE_GAS_MIN, "min gas is 2300");
+    require(gasLimit <= config.executeGasMax, "above gas limit");
 
     id = s_upkeepCount;
     s_upkeep[id] = Upkeep({
@@ -525,6 +529,8 @@ contract KeeperRegistry is
    * @param checkGasLimit gas limit when checking for upkeep
    * @param stalenessSeconds number of seconds that is allowed for feed data to
    * be stale before switching to the fallback pricing
+   * @param gasCeilingMultiplier multiplier to apply to fast gas price when calculating max payment
+   * @param executeGasMax max gas amount for individual upkeep
    * @param fallbackGasPrice gas price used if the gas price feed is stale
    * @param fallbackLinkPrice LINK price used if the LINK price feed is stale
    */
@@ -534,6 +540,7 @@ contract KeeperRegistry is
     uint32 checkGasLimit,
     uint24 stalenessSeconds,
     uint16 gasCeilingMultiplier,
+    uint32 executeGasMax,
     uint256 fallbackGasPrice,
     uint256 fallbackLinkPrice
   )
@@ -545,7 +552,8 @@ contract KeeperRegistry is
       blockCountPerTurn: blockCountPerTurn,
       checkGasLimit: checkGasLimit,
       stalenessSeconds: stalenessSeconds,
-      gasCeilingMultiplier: gasCeilingMultiplier
+      gasCeilingMultiplier: gasCeilingMultiplier,
+      executeGasMax: executeGasMax
     });
     s_fallbackGasPrice = fallbackGasPrice;
     s_fallbackLinkPrice = fallbackLinkPrice;
@@ -556,6 +564,7 @@ contract KeeperRegistry is
       checkGasLimit,
       stalenessSeconds,
       gasCeilingMultiplier,
+      executeGasMax,
       fallbackGasPrice,
       fallbackLinkPrice
     );
@@ -730,6 +739,7 @@ contract KeeperRegistry is
       uint32 checkGasLimit,
       uint24 stalenessSeconds,
       uint16 gasCeilingMultiplier,
+      uint32 executeGasMax,
       uint256 fallbackGasPrice,
       uint256 fallbackLinkPrice
     )
@@ -741,6 +751,7 @@ contract KeeperRegistry is
       config.checkGasLimit,
       config.stalenessSeconds,
       config.gasCeilingMultiplier,
+      config.executeGasMax,
       s_fallbackGasPrice,
       s_fallbackLinkPrice
     );

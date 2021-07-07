@@ -37,6 +37,7 @@ contract("UpkeepRegistrationRequests", (accounts) => {
   const emptyBytes = "0x00";
   const stalenessSeconds = new BN(43820);
   const gasCeilingMultiplier = new BN(1)
+  const maxExecuteGas = new BN(2500000)
   const maxCheckGas = new BN(20000000);
   const fallbackGasPrice = new BN(200);
   const fallbackLinkPrice = new BN(200000000);
@@ -61,6 +62,7 @@ contract("UpkeepRegistrationRequests", (accounts) => {
       maxCheckGas,
       stalenessSeconds,
       gasCeilingMultiplier,
+      maxExecuteGas,
       fallbackGasPrice,
       fallbackLinkPrice,
       { from: owner }

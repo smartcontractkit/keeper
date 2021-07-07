@@ -36,6 +36,7 @@ contract('KeeperRegistry', (accounts) => {
   const registryGasOverhead = new BN('80000')
   const stalenessSeconds = new BN(43820)
   const gasCeilingMultiplier = new BN(1)
+  const executeGasMax = new BN(2500000)
   const maxCheckGas = new BN(20000000)
   const fallbackGasPrice = new BN(200)
   const fallbackLinkPrice = new BN(200000000)
@@ -63,6 +64,7 @@ contract('KeeperRegistry', (accounts) => {
       maxCheckGas,
       stalenessSeconds,
       gasCeilingMultiplier,
+      executeGasMax,
       fallbackGasPrice,
       fallbackLinkPrice,
       { from: owner }
@@ -206,7 +208,7 @@ contract('KeeperRegistry', (accounts) => {
           emptyBytes,
           { from: owner }
         ),
-        'max gas is 2500000'
+        'above gas limit'
       )
     })
 
@@ -377,6 +379,7 @@ contract('KeeperRegistry', (accounts) => {
             maxCheckGas,
             stalenessSeconds,
             newGasMultiplier,
+            executeGasMax,
             fallbackGasPrice,
             fallbackLinkPrice,
             { from: owner }
@@ -496,6 +499,7 @@ contract('KeeperRegistry', (accounts) => {
           maxCheckGas,
           stalenessSeconds,
           multiplier,
+          executeGasMax,
           fallbackGasPrice,
           fallbackLinkPrice,
           { from: owner }
@@ -524,6 +528,7 @@ contract('KeeperRegistry', (accounts) => {
           maxCheckGas,
           stalenessSeconds,
           multiplier,
+          executeGasMax,
           fallbackGasPrice,
           fallbackLinkPrice,
           { from: owner }
@@ -984,6 +989,7 @@ contract('KeeperRegistry', (accounts) => {
     const staleness = new BN(3)
     const ceiling = new BN(10)
     const maxGas = new BN(4)
+    const executeGas = new BN(4000000)
     const fbGasEth = new BN(5)
     const fbLinkEth = new BN(6)
 
@@ -995,6 +1001,7 @@ contract('KeeperRegistry', (accounts) => {
           maxGas,
           staleness,
           gasCeilingMultiplier,
+          executeGas,
           fbGasEth,
           fbLinkEth,
           { from: payee1 }
@@ -1009,6 +1016,7 @@ contract('KeeperRegistry', (accounts) => {
       assert.isTrue(blockCountPerTurn.eq(old.blockCountPerTurn))
       assert.isTrue(stalenessSeconds.eq(old.stalenessSeconds))
       assert.isTrue(gasCeilingMultiplier.eq(old.gasCeilingMultiplier))
+      assert.isTrue(executeGasMax.eq(old.executeGasMax))
 
       await registry.setConfig(
         payment,
@@ -1016,6 +1024,7 @@ contract('KeeperRegistry', (accounts) => {
         maxGas,
         staleness,
         ceiling,
+        executeGas,
         fbGasEth,
         fbLinkEth,
         { from: owner }
@@ -1027,6 +1036,7 @@ contract('KeeperRegistry', (accounts) => {
       assert.isTrue(updated.stalenessSeconds.eq(staleness))
       assert.isTrue(updated.gasCeilingMultiplier.eq(ceiling))
       assert.isTrue(updated.checkGasLimit.eq(maxGas))
+      assert.isTrue(updated.executeGasMax.eq(executeGas))
       assert.isTrue(updated.fallbackGasPrice.eq(fbGasEth))
       assert.isTrue(updated.fallbackLinkPrice.eq(fbLinkEth))
     })
@@ -1038,6 +1048,7 @@ contract('KeeperRegistry', (accounts) => {
         maxGas,
         staleness,
         ceiling,
+        executeGas,
         fbGasEth,
         fbLinkEth,
         { from: owner }
@@ -1048,6 +1059,7 @@ contract('KeeperRegistry', (accounts) => {
         checkGasLimit: maxGas,
         stalenessSeconds: staleness,
         gasCeilingMultiplier: ceiling,
+        executeGasMax: executeGas,
         fallbackGasPrice: fbGasEth,
         fallbackLinkPrice: fbLinkEth,
       })
@@ -1197,6 +1209,7 @@ contract('KeeperRegistry', (accounts) => {
         maxCheckGas,
         stalenessSeconds,
         multiplier,
+        executeGasMax,
         fallbackGasPrice,
         fallbackLinkPrice,
         { from: owner }

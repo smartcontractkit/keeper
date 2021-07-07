@@ -54,6 +54,7 @@ interface KeeperRegistryBaseInterface {
       uint32 checkGasLimit,
       uint24 stalenessSeconds,
       uint16 gasCeilingMultiplier,
+      uint32 callMaxGas,
       uint256 fallbackGasPrice,
       uint256 fallbackLinkPrice
     );
