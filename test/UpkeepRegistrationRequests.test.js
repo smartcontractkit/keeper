@@ -1,27 +1,26 @@
-const KeeperRegistry = artifacts.require("KeeperRegistry");
-const UpkeepRegistrationRequests = artifacts.require(
-  "UpkeepRegistrationRequests"
-);
-
-const UpkeepMock = artifacts.require("UpkeepMock");
+const ethers = require("ethers");
 const { LinkToken } = require("@chainlink/contracts/truffle/v0.4/LinkToken");
-const {
-  MockV3Aggregator,
-} = require("@chainlink/contracts/truffle/v0.6/MockV3Aggregator");
-const {
-  BN,
-  constants,
-  ether,
-  expectEvent,
-  expectRevert,
-  time,
-} = require("@openzeppelin/test-helpers");
+const { MockV3Aggregator } = require("@chainlink/contracts/truffle/v0.6/MockV3Aggregator");
+const { BN, expectRevert } = require("@openzeppelin/test-helpers");
+
+const KeeperRegistry = artifacts.require("KeeperRegistry");
+const UpkeepRegistrationRequests = artifacts.require("UpkeepRegistrationRequests");
+const UpkeepMock = artifacts.require("UpkeepMock");
+
+const errorMsgs = {
+  onlyOwner: "revert Only callable by owner",
+  onlyAdmin: "revert only admin",
+  hashPayload: "hash and payload do not match",
+  requestNotFound: "request not found"
+}
 
 contract("UpkeepRegistrationRequests", (accounts) => {
+  const upkeepName = "SampleUpkeep";
   const owner = accounts[0];
   const admin = accounts[1];
   const someAddress = accounts[2];
   const registrarOwner = accounts[3];
+  const stranger = accounts[4];
   const linkEth = new BN(300000000);
   const gasWei = new BN(100);
   const executeGas = new BN(100000);
@@ -78,7 +77,6 @@ contract("UpkeepRegistrationRequests", (accounts) => {
   });
 
   describe("#register", () => {
-    const upkeepName = "SampleUpkeep";
 
     it("reverts if not called by the LINK token", async () => {
       await expectRevert(
@@ -98,9 +96,6 @@ contract("UpkeepRegistrationRequests", (accounts) => {
     });
 
     it("reverts if the amount passed in data mismatches actual amount sent", async () => {
-      //get current upkeep count
-      const upkeepCount = await registry.getUpkeepCount();
-
       //set auto approve ON with high threshold limits
       await registrar.setRegistrationConfig(
         true,
@@ -133,7 +128,30 @@ contract("UpkeepRegistrationRequests", (accounts) => {
         ),
         "Amount mismatch"
       );
+    });
 
+    it("reverts if the admin address is 0x0000...", async () => {
+      let abiEncodedBytes = registrar.contract.methods
+        .register(
+          upkeepName,
+          emptyBytes,
+          mock.address,
+          executeGas,
+          "0x0000000000000000000000000000000000000000",
+          emptyBytes,
+          amount,
+          source
+        )
+        .encodeABI();
+
+      await expectRevert(
+        linkToken.transferAndCall(
+          registrar.address,
+          amount,
+          abiEncodedBytes
+        ),
+        "Unable to create request"
+      );
     });
 
     it("Auto Approve ON - registers an upkeep on KeeperRegistry instantly and emits both RegistrationRequested and RegistrationApproved events", async () => {
@@ -265,6 +283,11 @@ contract("UpkeepRegistrationRequests", (accounts) => {
         !event_RegistrationApproved,
         "RegistrationApproved event should not be emitted"
       );
+
+      const hash = receipt.rawLogs[2].topics[1]
+      const pendingRequest = await registrar.getPendingRequest(hash)
+      assert.equal(admin, pendingRequest[0])
+      assert.ok(amount.eq(pendingRequest[1]))
     });
 
     it("Auto Approve ON - Throttle max approvals - does not registers an upkeep on KeeperRegistry beyond the throttle limit, emits only RegistrationRequested event after throttle starts", async () => {
@@ -306,6 +329,19 @@ contract("UpkeepRegistrationRequests", (accounts) => {
 
       //try registering more than threshold(say 2x), new upkeeps should not be registered after the threshold amount is reached
       for (let step = 0; step < threshold_small * 2; step++) {
+        abiEncodedBytes = registrar.contract.methods
+        .register(
+          upkeepName,
+          emptyBytes,
+          mock.address,
+          executeGas + step, // make unique hash
+          admin,
+          emptyBytes,
+          amount,
+          source
+        )
+        .encodeABI();
+
         await linkToken.transferAndCall(
           registrar.address,
           amount,
@@ -318,4 +354,136 @@ contract("UpkeepRegistrationRequests", (accounts) => {
       assert(newRegistrationsCount == threshold_small,"Registrations beyond threshold");
     });
   });
+
+  describe("#approve", () => {
+    let hash
+
+    beforeEach(async () => {
+      await registrar.setRegistrationConfig(
+        false,
+        window_small,
+        threshold_big,
+        registry.address,
+        minLINKJuels,
+        { from: registrarOwner }
+      );
+
+      //register with auto approve OFF
+      let abiEncodedBytes = registrar.contract.methods
+        .register(
+          upkeepName,
+          emptyBytes,
+          mock.address,
+          executeGas,
+          admin,
+          emptyBytes,
+          amount,
+          source
+        )
+        .encodeABI();
+      const { receipt } = await linkToken.transferAndCall(
+        registrar.address,
+        amount,
+        abiEncodedBytes
+      );
+      hash = receipt.rawLogs[2].topics[1]
+    })
+
+    it("reverts if not called by the owner", async () => {
+      const tx = registrar.approve(upkeepName, mock.address, executeGas, admin, emptyBytes, hash, { from: stranger })
+      await expectRevert(tx, errorMsgs.onlyOwner)
+    })
+
+    it("reverts if the hash does not exist", async () => {
+      const tx = registrar.approve(upkeepName, mock.address, executeGas, admin, emptyBytes, "0x1234", { from: registrarOwner })
+      await expectRevert(tx, errorMsgs.requestNotFound)
+    })
+
+    it("reverts if any member of the payload changes", async () => {
+      tx = registrar.approve(upkeepName, ethers.Wallet.createRandom().address, executeGas, admin, emptyBytes, hash, { from: registrarOwner })
+      await expectRevert(tx, errorMsgs.hashPayload)
+      tx = registrar.approve(upkeepName, mock.address, 10000, admin, emptyBytes, hash, { from: registrarOwner })
+      await expectRevert(tx, errorMsgs.hashPayload)
+      tx = registrar.approve(upkeepName, mock.address, executeGas, ethers.Wallet.createRandom().address, emptyBytes, hash, { from: registrarOwner })
+      await expectRevert(tx, errorMsgs.hashPayload)
+      tx = registrar.approve(upkeepName, mock.address, executeGas, admin, "0x1234", hash, { from: registrarOwner })
+      await expectRevert(tx, errorMsgs.hashPayload)
+    })
+
+    it("approves an existing registration request", async () => {
+      await registrar.approve(upkeepName, mock.address, executeGas, admin, emptyBytes, hash, { from: registrarOwner })
+    })
+
+    it("deletes the request afterwards / reverts if the request DNE", async () => {
+      await registrar.approve(upkeepName, mock.address, executeGas, admin, emptyBytes, hash, { from: registrarOwner })
+      const tx = registrar.approve(upkeepName, mock.address, executeGas, admin, emptyBytes, hash, { from: registrarOwner })
+      await expectRevert(tx, errorMsgs.requestNotFound)
+    })
+  })
+
+  describe("#cancel", () => {
+    let hash
+
+    beforeEach(async () => {
+      await registrar.setRegistrationConfig(
+        false,
+        window_small,
+        threshold_big,
+        registry.address,
+        minLINKJuels,
+        { from: registrarOwner }
+      );
+
+      //register with auto approve OFF
+      let abiEncodedBytes = registrar.contract.methods
+        .register(
+          upkeepName,
+          emptyBytes,
+          mock.address,
+          executeGas,
+          admin,
+          emptyBytes,
+          amount,
+          source
+        )
+        .encodeABI();
+      const { receipt } = await linkToken.transferAndCall(
+        registrar.address,
+        amount,
+        abiEncodedBytes
+      );
+      hash = receipt.rawLogs[2].topics[1]
+      // submit duplicate request (increase balance)
+      await linkToken.transferAndCall(
+        registrar.address,
+        amount,
+        abiEncodedBytes
+      );
+    })
+
+    it("reverts if not called by the admin / owner", async () => {
+      const tx = registrar.cancel(hash, { from: stranger })
+      await expectRevert(tx, "only admin / owner can cancel")
+    })
+
+    it("reverts if the hash does not exist", async () => {
+      const tx = registrar.cancel("0x1234", { from: admin })
+      await expectRevert(tx, errorMsgs.onlyAdmin)
+    })
+
+    it("refunds the total request balance to the admin address", async () => {
+      const before = await linkToken.balanceOf(admin)
+      await registrar.cancel(hash, { from: admin })
+      const after = await linkToken.balanceOf(admin)
+      assert.isTrue(after.sub(before).eq(amount.mul(new BN(2))))
+    })
+
+    it("deletes the request hash", async () => {
+      await registrar.cancel(hash, { from: registrarOwner })
+      let tx = registrar.cancel(hash, { from: registrarOwner })
+      await expectRevert(tx, errorMsgs.requestNotFound)
+      tx = registrar.approve(upkeepName, mock.address, executeGas, admin, emptyBytes, hash, { from: registrarOwner })
+      await expectRevert(tx, errorMsgs.requestNotFound)
+    })
+  })
 });

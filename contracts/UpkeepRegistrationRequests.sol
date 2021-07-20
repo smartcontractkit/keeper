@@ -5,6 +5,7 @@ pragma solidity 0.7.6;
 import "@chainlink/contracts/src/v0.7/interfaces/LinkTokenInterface.sol";
 import "./vendor/Owned.sol";
 import "./KeeperRegistryInterface.sol";
+import "./SafeMath96.sol";
 
 /**
  * @notice Contract to accept requests for upkeep registrations
@@ -17,9 +18,12 @@ import "./KeeperRegistryInterface.sol";
  * they can just listen to `RegistrationRequested` & `RegistrationApproved` events and know the status on registrations.
  */
 contract UpkeepRegistrationRequests is Owned {
+    using SafeMath96 for uint96;
+
     bytes4 private constant REGISTER_REQUEST_SELECTOR = this.register.selector;
 
     uint256 private s_minLINKJuels;
+    mapping(bytes32 => PendingRequest) private s_pendingRequests;
 
     LinkTokenInterface public immutable LINK;
 
@@ -29,6 +33,11 @@ contract UpkeepRegistrationRequests is Owned {
         uint32 windowSizeInBlocks;
         uint64 windowStart;
         uint16 approvedInCurrentWindow;
+    }
+
+    struct PendingRequest {
+        address admin;
+        uint96 balance;
     }
 
     AutoApprovedConfig private s_config;
@@ -74,9 +83,8 @@ contract UpkeepRegistrationRequests is Owned {
      * @notice register can only be called through transferAndCall on LINK contract
      * @param name string of the upkeep to be registered
      * @param encryptedEmail email address of upkeep contact
-     * @param upkeepContract address to perform upkeep on
-     * @param gasLimit amount of gas to provide the target contract when
-     * performing upkeep
+     * @param upkeepContract address to peform upkeep on
+     * @param gasLimit amount of gas to provide the target contract when performing upkeep
      * @param adminAddress address to cancel upkeep and withdraw remaining funds
      * @param checkData data passed to the contract when checking for upkeep
      * @param amount quantity of LINK upkeep is funded with (specified in Juels)
@@ -95,7 +103,8 @@ contract UpkeepRegistrationRequests is Owned {
       external
       onlyLINK()
     {
-        bytes32 hash = keccak256(msg.data);
+        require(adminAddress != address(0), "invalid admin address");
+        bytes32 hash = keccak256(abi.encode(upkeepContract, gasLimit, adminAddress, checkData));
 
         emit RegistrationRequested(
             hash,
@@ -122,6 +131,12 @@ contract UpkeepRegistrationRequests is Owned {
                 amount,
                 hash
             );
+        } else {
+            uint96 newBalance = s_pendingRequests[hash].balance.add(amount);
+            s_pendingRequests[hash] = PendingRequest({
+                admin: adminAddress,
+                balance: newBalance
+            });
         }
     }
 
@@ -134,21 +149,41 @@ contract UpkeepRegistrationRequests is Owned {
         uint32 gasLimit,
         address adminAddress,
         bytes calldata checkData,
-        uint96 amount,
         bytes32 hash
     )
       external
       onlyOwner()
     {
+        PendingRequest memory request = s_pendingRequests[hash];
+        require(request.admin != address(0), "request not found");
+        bytes32 expectedHash = keccak256(abi.encode(upkeepContract, gasLimit, adminAddress, checkData));
+        require(hash == expectedHash, "hash and payload do not match");
+        delete s_pendingRequests[hash];
         _approve(
             name,
             upkeepContract,
             gasLimit,
             adminAddress,
             checkData,
-            amount,
+            request.balance,
             hash
         );
+    }
+
+    /**
+     * @notice cancel will remove a registration request and return the refunds to the msg.sender
+     * @param hash the request hash
+     */
+    function cancel(
+        bytes32 hash
+    )
+      external
+    {
+        PendingRequest memory request = s_pendingRequests[hash];
+        require(msg.sender == request.admin || msg.sender == owner, "only admin / owner can cancel");
+        require(request.admin != address(0), "request not found");
+        delete s_pendingRequests[hash];
+        require(LINK.transfer(msg.sender, request.balance), "LINK token transfer failed");
     }
 
     /**
@@ -213,6 +248,14 @@ contract UpkeepRegistrationRequests is Owned {
             config.windowStart,
             config.approvedInCurrentWindow
         );
+    }
+
+    /**
+     * @notice gets the admin address and the current balance of a registration request
+     */
+    function getPendingRequest(bytes32 hash) external view returns(address, uint96) {
+        PendingRequest memory request = s_pendingRequests[hash];
+        return (request.admin, request.balance);
     }
 
     /**
