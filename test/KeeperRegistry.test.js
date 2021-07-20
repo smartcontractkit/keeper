@@ -399,6 +399,16 @@ contract('KeeperRegistry', (accounts) => {
   })
 
   describe('#performUpkeep', () => {
+    let _lastKeeper = keeper1
+    async function getPerformPaymentAmount(){
+      _lastKeeper = _lastKeeper === keeper1 ? keeper2 : keeper1
+      const before = (await registry.getKeeperInfo(_lastKeeper)).balance
+      await registry.performUpkeep(id, "0x", {from: _lastKeeper})
+      const after = (await registry.getKeeperInfo(_lastKeeper)).balance
+      const difference = after.sub(before)
+      return difference
+    }
+
     it('reverts if the registration is not funded', async () => {
       await expectRevert(
         registry.performUpkeep(id, "0x", { from: keeper2 }),
@@ -581,37 +591,51 @@ contract('KeeperRegistry', (accounts) => {
       })
 
       it("uses the fallback gas price if the feed price is stale", async () => {
+        const normalAmount = await getPerformPaymentAmount()
         const roundId = 99
         const answer = 100
         const updatedAt = 946684800 // New Years 2000 🥳
         const startedAt = 946684799
         await gasPriceFeed.updateRoundData(roundId, answer, updatedAt, startedAt, {from: owner})
+        const amountWithStaleFeed = await getPerformPaymentAmount()
+        assert.isTrue(normalAmount.lt(amountWithStaleFeed))
+      })
 
-        const before = (await registry.getKeeperInfo(keeper1)).balance
-        const { receipt } = await registry.performUpkeep(id, "0x", {from: keeper1})
-        const after = (await registry.getKeeperInfo(keeper1)).balance
-        const difference = after.sub(before)
-        // 3500 is more gas then expected, but the ration is so far off that
-        // this should test the difference in gas without being an overly
-        // sensitive test.
-        assert.isTrue(linkForGas(3500).lt(difference))
+      it("uses the fallback gas price if the feed price is non-sensical", async () => {
+        const normalAmount = await getPerformPaymentAmount()
+        const roundId = 99
+        const updatedAt = Math.floor(Date.now() / 1000)
+        const startedAt = 946684799
+        await gasPriceFeed.updateRoundData(roundId, -100, updatedAt, startedAt, {from: owner})
+        const amountWithNegativeFeed = await getPerformPaymentAmount()
+        await gasPriceFeed.updateRoundData(roundId, 0, updatedAt, startedAt, {from: owner})
+        const amountWithZeroFeed = await getPerformPaymentAmount()
+        assert.isTrue(normalAmount.lt(amountWithNegativeFeed))
+        assert.isTrue(normalAmount.lt(amountWithZeroFeed))
       })
 
       it("uses the fallback if the link price feed is stale", async () => {
+        const normalAmount = await getPerformPaymentAmount()
         const roundId = 99
         const answer = 100
         const updatedAt = 946684800 // New Years 2000 🥳
         const startedAt = 946684799
         await linkEthFeed.updateRoundData(roundId, answer, updatedAt, startedAt, {from: owner})
+        const amountWithStaleFeed = await getPerformPaymentAmount()
+        assert.isTrue(normalAmount.lt(amountWithStaleFeed))
+      })
 
-        const before = (await registry.getKeeperInfo(keeper1)).balance
-        const { receipt } = await registry.performUpkeep(id, "0x", {from: keeper1})
-        const after = (await registry.getKeeperInfo(keeper1)).balance
-        const difference = after.sub(before)
-        // 3500 is more gas then expected, but the ration is so far off that
-        // this should test the difference in gas without being an overly
-        // sensitive test.
-        assert.isTrue(linkForGas(3500).lt(difference))
+      it("uses the fallback link price if the feed price is non-sensical", async () => {
+        const normalAmount = await getPerformPaymentAmount()
+        const roundId = 99
+        const updatedAt = Math.floor(Date.now() / 1000)
+        const startedAt = 946684799
+        await linkEthFeed.updateRoundData(roundId, -100, updatedAt, startedAt, {from: owner})
+        const amountWithNegativeFeed = await getPerformPaymentAmount()
+        await linkEthFeed.updateRoundData(roundId, 0, updatedAt, startedAt, {from: owner})
+        const amountWithZeroFeed = await getPerformPaymentAmount()
+        assert.isTrue(normalAmount.lt(amountWithNegativeFeed))
+        assert.isTrue(normalAmount.lt(amountWithZeroFeed))
       })
 
       it('reverts if the same caller calls twice in a row', async () => {

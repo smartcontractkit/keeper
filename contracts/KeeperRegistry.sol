@@ -800,13 +800,13 @@ contract KeeperRegistry is
     uint256 timestamp;
     int256 feedValue;
     (,feedValue,,timestamp,) = FAST_GAS_FEED.latestRoundData();
-    if (staleFallback && stalenessSeconds < block.timestamp - timestamp || feedValue < 0) {
+    if (staleFallback && stalenessSeconds < block.timestamp - timestamp || feedValue <=0) {
       gasWei = s_fallbackGasPrice;
     } else {
       gasWei = uint256(feedValue);
     }
     (,feedValue,,timestamp,) = LINK_ETH_FEED.latestRoundData();
-    if (staleFallback && stalenessSeconds < block.timestamp - timestamp || feedValue < 0) {
+    if (staleFallback && stalenessSeconds < block.timestamp - timestamp || feedValue <=0) {
       linkEth = s_fallbackLinkPrice;
     } else {
       linkEth = uint256(feedValue);
