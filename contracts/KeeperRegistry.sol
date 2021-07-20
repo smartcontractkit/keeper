@@ -54,6 +54,7 @@ contract KeeperRegistry is
   Config private s_config;
   uint256 private s_fallbackGasPrice;  // not in config object for gas savings
   uint256 private s_fallbackLinkPrice; // not in config object for gas savings
+  uint256 private s_expectedLinkBalance;
 
   LinkTokenInterface public immutable LINK;
   AggregatorV3Interface public immutable LINK_ETH_FEED;
@@ -359,6 +360,7 @@ contract KeeperRegistry is
     validUpkeep(id)
   {
     s_upkeep[id].balance = s_upkeep[id].balance.add(amount);
+    s_expectedLinkBalance = s_expectedLinkBalance.add(amount);
     LINK.transferFrom(msg.sender, address(this), amount);
     emit FundsAdded(id, msg.sender, amount);
   }
@@ -382,6 +384,7 @@ contract KeeperRegistry is
     validateUpkeep(id);
 
     s_upkeep[id].balance = s_upkeep[id].balance.add(uint96(amount));
+    s_expectedLinkBalance = s_expectedLinkBalance.add(amount);
 
     emit FundsAdded(id, sender, uint96(amount));
   }
@@ -403,6 +406,7 @@ contract KeeperRegistry is
 
     uint256 amount = s_upkeep[id].balance;
     s_upkeep[id].balance = 0;
+    s_expectedLinkBalance = s_expectedLinkBalance.sub(amount);
     emit FundsWithdrawn(id, amount, to);
 
     LINK.transfer(to, amount);
@@ -418,19 +422,8 @@ contract KeeperRegistry is
     external
     onlyOwner()
   {
-    uint96 locked = 0;
-    uint256 max = s_upkeepCount;
-    for (uint256 i = 0; i < max; i++) {
-      locked = s_upkeep[i].balance.add(locked);
-    }
-    max = s_keeperList.length;
-    for (uint256 i = 0; i < max; i++) {
-      address addr = s_keeperList[i];
-      locked = s_keeperInfo[addr].balance.add(locked);
-    }
-
     uint256 total = LINK.balanceOf(address(this));
-    LINK.transfer(msg.sender, total.sub(locked));
+    LINK.transfer(msg.sender, total.sub(s_expectedLinkBalance));
   }
 
   /**
@@ -449,6 +442,7 @@ contract KeeperRegistry is
     require(keeper.payee == msg.sender, "only callable by payee");
 
     s_keeperInfo[from].balance = 0;
+    s_expectedLinkBalance = s_expectedLinkBalance.sub(keeper.balance);
     emit PaymentWithdrawn(from, keeper.balance, to, msg.sender);
 
     LINK.transfer(to, keeper.balance);
