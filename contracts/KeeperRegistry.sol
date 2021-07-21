@@ -574,6 +574,8 @@ contract KeeperRegistry is
     external
     onlyOwner()
   {
+    require(keepers.length == payees.length, "address lists not the same length");
+    require(keepers.length >= 2, "not enough keepers");
     for (uint256 i = 0; i < s_keeperList.length; i++) {
       address keeper = s_keeperList[i];
       s_keeperInfo[keeper].active = false;
@@ -583,6 +585,7 @@ contract KeeperRegistry is
       KeeperInfo storage s_keeper = s_keeperInfo[keeper];
       address oldPayee = s_keeper.payee;
       address newPayee = payees[i];
+      require(newPayee != address(0), "cannot set payee to the zero address");
       require(oldPayee == ZERO_ADDRESS || oldPayee == newPayee || newPayee == IGNORE_ADDRESS, "cannot change payee");
       require(!s_keeper.active, "cannot add keeper twice");
       s_keeper.active = true;

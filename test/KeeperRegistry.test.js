@@ -94,8 +94,26 @@ contract('KeeperRegistry', (accounts) => {
 
     it('reverts when adding the same keeper twice', async () => {
       await expectRevert(
-        registry.setKeepers([payee1, payee1], [keeper1, keeper1], {from: owner}),
+        registry.setKeepers([keeper1, keeper1], [payee1, payee1], {from: owner}),
         "cannot add keeper twice"
+      )
+    })
+
+    it('reverts with different numbers of keepers/payees', async () => {
+      await expectRevert(
+        registry.setKeepers([keeper1, keeper2], [payee1], {from: owner}),
+        "address lists not the same length"
+      )
+      await expectRevert(
+        registry.setKeepers([keeper1], [payee1, payee2], {from: owner}),
+        "address lists not the same length"
+      )
+    })
+
+    it('reverts if the payee is the zero address', async () => {
+      await expectRevert(
+        registry.setKeepers([keeper1, keeper2], [payee1, "0x0000000000000000000000000000000000000000"], {from: owner}),
+        "cannot set payee to the zero address"
       )
     })
 
@@ -119,7 +137,7 @@ contract('KeeperRegistry', (accounts) => {
 
     it('updates the keeper to inactive when removed', async () => {
       await registry.setKeepers(keepers, payees, {from: owner})
-      await registry.setKeepers([keeper1], [payee1], {from: owner})
+      await registry.setKeepers([keeper1, keeper3], [payee1, payee3], {from: owner})
       const added = await registry.getKeeperInfo(keeper1)
       assert.isTrue(added.active)
       const removed = await registry.getKeeperInfo(keeper2)
