@@ -259,7 +259,7 @@ contract('KeeperRegistry', (accounts) => {
     it('reverts if the registration does not exist', async () => {
       await expectRevert(
         registry.addFunds(id + 1, amount, { from: keeper1 }),
-        'invalid upkeep id'
+        'upkeep must be active'
       )
     })
 
@@ -277,6 +277,14 @@ contract('KeeperRegistry', (accounts) => {
         from: keeper1,
         amount: amount
       })
+    })
+
+    it('reverts if the upkeep is canceled', async () => {
+      await registry.cancelUpkeep(id, { from: admin })
+      await expectRevert(
+        registry.addFunds(id, amount, { from: keeper1 }),
+        "upkeep must be active",
+      )
     })
   })
 
@@ -1117,6 +1125,14 @@ contract('KeeperRegistry', (accounts) => {
       )
       await expectRevert.unspecified(
         linkToken.transferAndCall(registry.address, amount, shortData, {from: owner})
+      )
+    })
+
+    it('reverts if the upkeep is canceled', async () => {
+      await registry.cancelUpkeep(id, { from: admin })
+      await expectRevert(
+        registry.addFunds(id, amount, { from: keeper1 }),
+        "upkeep must be active",
       )
     })
 

@@ -202,7 +202,7 @@ contract KeeperRegistry is
 
   /**
    * @notice adds a new upkeep
-   * @param target address to peform upkeep on
+   * @param target address to perform upkeep on
    * @param gasLimit amount of gas to provide the target contract when
    * performing upkeep
    * @param admin address to cancel upkeep and withdraw remaining funds
@@ -244,9 +244,9 @@ contract KeeperRegistry is
 
   /**
    * @notice simulated by keepers via eth_call to see if the upkeep needs to be
-   * performed. If it does need to be performed then the call simulates the
-   * transaction performing upkeep to make sure it succeeds. It then eturns the
-   * success status along with payment information and the perform data payload.
+   * performed. If upkeep is needed, the call then simulates performUpkeep
+   * to make sure it succeeds. Finally, it returns the success status along with
+   * payment information and the perform data payload.
    * @param id identifier of the upkeep to check
    * @param from the address to simulate performing the upkeep from
    */
@@ -296,7 +296,7 @@ contract KeeperRegistry is
    * @notice executes the upkeep with the perform data returned from
    * checkUpkeep, validates the keeper's permissions, and pays the keeper.
    * @param id identifier of the upkeep to execute the data with.
-   * @param performData calldata paramter to be passed to the target upkeep.
+   * @param performData calldata parameter to be passed to the target upkeep.
    */
   function performUpkeep(
     uint256 id,
@@ -331,7 +331,7 @@ contract KeeperRegistry is
     bool notCanceled = maxValid == UINT64_MAX;
     bool isOwner = msg.sender == owner;
     require(notCanceled || (isOwner && maxValid > block.number), "too late to cancel upkeep");
-    require(isOwner|| msg.sender == s_upkeep[id].admin, "only owner or admin");
+    require(isOwner || msg.sender == s_upkeep[id].admin, "only owner or admin");
 
     uint256 height = block.number;
     if (!isOwner) {
@@ -357,8 +357,8 @@ contract KeeperRegistry is
   )
     external
     override
-    validUpkeep(id)
   {
+    require(s_upkeep[id].maxValidBlocknumber == UINT64_MAX, "upkeep must be active");
     s_upkeep[id].balance = s_upkeep[id].balance.add(amount);
     s_expectedLinkBalance = s_expectedLinkBalance.add(amount);
     LINK.transferFrom(msg.sender, address(this), amount);
@@ -381,7 +381,7 @@ contract KeeperRegistry is
     require(msg.sender == address(LINK), "only callable through LINK");
     require(data.length == 32, "data must be 32 bytes");
     uint256 id = abi.decode(data, (uint256));
-    validateUpkeep(id);
+    require(s_upkeep[id].maxValidBlocknumber == UINT64_MAX, "upkeep must be active");
 
     s_upkeep[id].balance = s_upkeep[id].balance.add(uint96(amount));
     s_expectedLinkBalance = s_expectedLinkBalance.add(amount);
@@ -390,7 +390,7 @@ contract KeeperRegistry is
   }
 
   /**
-   * @notice removes funding from a cancelled upkeep
+   * @notice removes funding from a canceled upkeep
    * @param id upkeep to withdraw funds from
    * @param to destination address for sending remaining funds
    */
@@ -556,10 +556,10 @@ contract KeeperRegistry is
   }
 
   /**
-   * @notice update the list of keepers allowed to peform upkeep
+   * @notice update the list of keepers allowed to perform upkeep
    * @param keepers list of addresses allowed to perform upkeep
    * @param payees addreses corresponding to keepers who are allowed to
-   * move payments which have been acrued
+   * move payments which have been accrued
    */
   function setKeepers(
     address[] calldata keepers,
