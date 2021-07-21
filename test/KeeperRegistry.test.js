@@ -1151,6 +1151,17 @@ contract('KeeperRegistry', (accounts) => {
       await registry.performUpkeep(id2, "0x", { from: keeper2 })
       await registry.performUpkeep(id2, "0x", { from: keeper3 })
       await registry.withdrawPayment(keeper2, nonkeeper, { from: payee2 })
+
+      // transfer funds using onTokenTransfer
+      const data = web3.eth.abi.encodeParameter('uint256', id2.toNumber().toString())
+      await linkToken.transferAndCall(registry.address, ether('1'), data, { from: owner})
+
+      // remove a keeper
+      await registry.setKeepers([keeper1, keeper2], [payee1, payee2], {from: owner})
+
+      // withdraw some funds
+      await registry.cancelUpkeep(id1, { from: owner })
+      await registry.withdrawFunds(id1, admin, { from: admin })
     })
 
     it('reverts if not called by owner', async () => {
