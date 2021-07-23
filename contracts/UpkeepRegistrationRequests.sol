@@ -74,7 +74,7 @@ contract UpkeepRegistrationRequests is Owned {
      * @notice register can only be called through transferAndCall on LINK contract
      * @param name string of the upkeep to be registered
      * @param encryptedEmail email address of upkeep contact
-     * @param upkeepContract address to peform upkeep on
+     * @param upkeepContract address to perform upkeep on
      * @param gasLimit amount of gas to provide the target contract when
      * performing upkeep
      * @param adminAddress address to cancel upkeep and withdraw remaining funds
