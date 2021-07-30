@@ -35,7 +35,7 @@ contract KeeperRegistry is
   address constant private IGNORE_ADDRESS = 0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF;
   bytes4 constant private CHECK_SELECTOR = KeeperCompatibleInterface.checkUpkeep.selector;
   bytes4 constant private PERFORM_SELECTOR = KeeperCompatibleInterface.performUpkeep.selector;
-  uint256 constant private CALL_GAS_MAX = 2_500_000;
+  uint256 constant private CALL_GAS_MAX = 5_000_000;
   uint256 constant private CALL_GAS_MIN = 2_300;
   uint256 constant private CANCELATION_DELAY = 50;
   uint256 constant private CUSHION = 5_000;
