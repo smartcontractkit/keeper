@@ -219,7 +219,7 @@ contract('KeeperRegistry', (accounts) => {
       await expectRevert(
         registry.registerUpkeep(
           mock.address,
-          2500001,
+          5000001,
           admin,
           emptyBytes,
           { from: owner }
