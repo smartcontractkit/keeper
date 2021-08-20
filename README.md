@@ -22,7 +22,14 @@ The following networks are supported by keeper:
 
 ### Deploy
 
-Set environment variables `PRIVATE_KEY` and `RPC_URL` according to the network smart contracts will be deployed to.
+Set environment variables `<NETWORK>_PRIVATE_KEY` and `<NETWORK>_RPC_URL` according to the network smart contracts will be deployed to.
+Environment variables per network:
+- `kovan`:
+  - `KOVAN_PRIVATE_KEY`
+  - `KOVAN_RPC_URL`
+- `mumbai`:
+  - `MUMBAI_PRIVATE_KEY`
+  - `MUMBAI_RPC_URL`
 
 Then run:
 ```bash
