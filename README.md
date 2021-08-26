@@ -19,6 +19,7 @@ yarn test
 The following networks are supported by keeper:
 - `kovan`: Ethereum testnet with chain ID 42
 - `mumbai`: Polygon testnet with chain ID 80001
+- `bsctestnet`: Polygon testnet with chain ID 97
 
 ### Deploy
 
@@ -30,6 +31,9 @@ Environment variables per network:
 - `mumbai`:
   - `MUMBAI_PRIVATE_KEY`
   - `MUMBAI_RPC_URL`
+- `bsctestnet`:
+  - `BSCTESTNET_PRIVATE_KEY`
+  - `BSCTESTNET_RPC_URL`
 
 Then run:
 ```bash

@@ -8,7 +8,9 @@
     "deploy:kovan": "hardhat deploy --network kovan --gasprice 1000000000",
     "verify:kovan": "hardhat etherscan-verify --network kovan --api-key $ETHERSCAN_API_KEY",
     "deploy:mumbai": "hardhat deploy --network mumbai --gasprice 1000000000",
-    "verify:mumbai": "hardhat etherscan-verify --network mumbai --api-key $ETHERSCAN_API_KEY"
+    "verify:mumbai": "hardhat etherscan-verify --network mumbai --api-key $ETHERSCAN_API_KEY",
+    "deploy:bsctestnet": "hardhat deploy --network bsctestnet --gasprice 1000000000",
+    "verify:bsctestnet": "hardhat etherscan-verify --network bsctestnet --api-key $ETHERSCAN_API_KEY"
   },
   "dependencies": {
     "@chainlink/contracts": "^0.1.6",
