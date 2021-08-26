@@ -19,7 +19,7 @@ yarn test
 The following networks are supported by keeper:
 - `kovan`: Ethereum testnet with chain ID 42
 - `mumbai`: Polygon testnet with chain ID 80001
-- `bsctestnet`: Polygon testnet with chain ID 97
+- `bsctestnet`: BSC Testnet with chain ID 97
 
 ### Deploy
 
