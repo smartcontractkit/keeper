@@ -32,7 +32,7 @@ module.exports = {
     bsctestnet: {
       url: bscTestnetUrl,
       accounts: [bscTestnetPrivateKey],
-      chainId: 80001,
+      chainId: 97,
     }
   },
   solidity: {
@@ -55,13 +55,13 @@ module.exports = {
       1: '0xDC530D9457755926550b59e8ECcdaE7624181557',
       42: '0x3Af8C569ab77af5230596Acf0E8c2F9351d24C38',
       80001: '0xc0FAb0a0c9204ae4682eFdca3F05EAAb17440271', // FIXME: Replace to the real feed smart contract deployed on Mumbai. The provided one is the mock.
-      97: '', // FIXME: Replace to the real feed smart contract deployed on BSC Testnet. The provided one is the mock.
+      97: '0xBF44C29A52dF268841f7C689F73A5ec6dc6e6409', // FIXME: Replace to the real feed smart contract deployed on BSC Testnet. The provided one is the mock.
     },
     fastGas: {
       1: '0x169E633A2D1E6c10dD91238Ba11c4A708dfEF37C',
       42: '0x73B9b95a2AE128225dbE53A7451B6c97e3De6F08',
       80001: '0xc0FAb0a0c9204ae4682eFdca3F05EAAb17440271', // FIXME: Replace to the real feed smart contract deployed on Mumbai. The provided one is the mock.
-      97: '', // FIXME: Replace to the real feed smart contract deployed on BSC Testnet. The provided one is the mock.
+      97: '0xBF44C29A52dF268841f7C689F73A5ec6dc6e6409', // FIXME: Replace to the real feed smart contract deployed on BSC Testnet. The provided one is the mock.
     },
     deployer: {
       default: deployer
@@ -69,7 +69,7 @@ module.exports = {
   },
   gasReporter: {
     currency: 'USD',
-    gasPrice: 1
+    gasPrice: 10
   }
 };
 

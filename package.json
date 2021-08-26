@@ -9,7 +9,7 @@
     "verify:kovan": "hardhat etherscan-verify --network kovan --api-key $ETHERSCAN_API_KEY",
     "deploy:mumbai": "hardhat deploy --network mumbai --gasprice 1000000000",
     "verify:mumbai": "hardhat etherscan-verify --network mumbai --api-key $ETHERSCAN_API_KEY",
-    "deploy:bsctestnet": "hardhat deploy --network bsctestnet --gasprice 1000000000",
+    "deploy:bsctestnet": "hardhat deploy --network bsctestnet --gasprice 10000000000",
     "verify:bsctestnet": "hardhat etherscan-verify --network bsctestnet --api-key $ETHERSCAN_API_KEY"
   },
   "dependencies": {
