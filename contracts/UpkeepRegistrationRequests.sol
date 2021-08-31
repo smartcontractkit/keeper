@@ -103,41 +103,32 @@ contract UpkeepRegistrationRequests is Owned {
       external
       onlyLINK()
     {
-        require(adminAddress != address(0), "invalid admin address");
-        bytes32 hash = keccak256(abi.encode(upkeepContract, gasLimit, adminAddress, checkData));
+        _register(name, encryptedEmail, upkeepContract, gasLimit, adminAddress, checkData, amount, source);
+    }
 
-        emit RegistrationRequested(
-            hash,
-            name,
-            encryptedEmail,
-            upkeepContract,
-            gasLimit,
-            adminAddress,
-            checkData,
-            amount,
-            source
-        );
-
-        AutoApprovedConfig memory config = s_config;
-        if (config.enabled && _underApprovalLimit(config)) {
-            _incrementApprovedCount(config);
-
-            _approve(
-                name,
-                upkeepContract,
-                gasLimit,
-                adminAddress,
-                checkData,
-                amount,
-                hash
-            );
-        } else {
-            uint96 newBalance = s_pendingRequests[hash].balance.add(amount);
-            s_pendingRequests[hash] = PendingRequest({
-                admin: adminAddress,
-                balance: newBalance
-            });
-        }
+    /**
+     * @notice transferAndRegister will transfer LINK and register an upkeep, but the LINK must be approved first
+     * @param name string of the upkeep to be registered
+     * @param encryptedEmail email address of upkeep contact
+     * @param upkeepContract address to peform upkeep on
+     * @param gasLimit amount of gas to provide the target contract when performing upkeep
+     * @param adminAddress address to cancel upkeep and withdraw remaining funds
+     * @param checkData data passed to the contract when checking for upkeep
+     * @param amount quantity of LINK upkeep is funded with (specified in Juels)
+     * @param source application sending this request
+     */
+    function transferAndRegister(
+        string memory name,
+        bytes calldata encryptedEmail,
+        address upkeepContract,
+        uint32 gasLimit,
+        address adminAddress,
+        bytes calldata checkData,
+        uint96 amount,
+        uint8 source
+    ) public {
+        require(LINK.transferFrom(msg.sender, address(this), amount));
+        _register(name, encryptedEmail, upkeepContract, gasLimit, adminAddress, checkData, amount, source);
     }
 
     /**
@@ -280,6 +271,55 @@ contract UpkeepRegistrationRequests is Owned {
 
     //PRIVATE
 
+    function _register(
+        string memory name,
+        bytes calldata encryptedEmail,
+        address upkeepContract,
+        uint32 gasLimit,
+        address adminAddress,
+        bytes calldata checkData,
+        uint96 amount,
+        uint8 source
+    )
+      private
+    {
+        require(adminAddress != address(0), "invalid admin address");
+        bytes32 hash = keccak256(abi.encode(upkeepContract, gasLimit, adminAddress, checkData));
+
+        emit RegistrationRequested(
+            hash,
+            name,
+            encryptedEmail,
+            upkeepContract,
+            gasLimit,
+            adminAddress,
+            checkData,
+            amount,
+            source
+        );
+
+        AutoApprovedConfig memory config = s_config;
+        if (config.enabled && _underApprovalLimit(config)) {
+            _incrementApprovedCount(config);
+
+            _approve(
+                name,
+                upkeepContract,
+                gasLimit,
+                adminAddress,
+                checkData,
+                amount,
+                hash
+            );
+        } else {
+            uint96 newBalance = s_pendingRequests[hash].balance.add(amount);
+            s_pendingRequests[hash] = PendingRequest({
+                admin: adminAddress,
+                balance: newBalance
+            });
+        }
+    }
+
     /**
      * @dev reset auto approve window if passed end of current window
      */
@@ -319,13 +359,10 @@ contract UpkeepRegistrationRequests is Owned {
             adminAddress,
             checkData
         );
+        // approve funds
+        LINK.approve(address(keeperRegistry), amount);
         // fund upkeep
-        bool success = LINK.transferAndCall(
-          address(keeperRegistry),
-          amount,
-          abi.encode(upkeepId)
-        );
-        require(success, "failed to fund upkeep");
+        keeperRegistry.addFunds(upkeepId, amount);
 
         emit RegistrationApproved(hash, name, upkeepId);
     }

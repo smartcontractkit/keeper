@@ -355,6 +355,56 @@ contract("UpkeepRegistrationRequests", (accounts) => {
     });
   });
 
+  describe("#transferAndRegister", () => {
+    it("allows a user to register", async () => {
+      await linkToken.transfer(admin, amount)
+      await linkToken.approve(registrar.address, amount, { from: admin })
+      const { receipt } = await registrar.transferAndRegister(
+        upkeepName,
+        emptyBytes,
+        mock.address,
+        executeGas,
+        admin,
+        emptyBytes,
+        amount,
+        source,
+        { from: admin }
+      )
+
+      //confirm that only RegistrationRequested event is amitted and RegistrationApproved event is not
+      let event_RegistrationRequested = receipt.rawLogs.some((l) => {
+        return (
+          l.topics[0] ==
+          web3.utils.keccak256(
+            "RegistrationRequested(bytes32,string,bytes,address,uint32,address,bytes,uint96,uint8)"
+          )
+        );
+      });
+      assert.ok(
+        event_RegistrationRequested,
+        "RegistrationRequested event not emitted"
+      );
+    })
+
+    it("reverts if the requested amount has not been approved", async () => {
+      await linkToken.transfer(admin, amount)
+      await linkToken.approve(registrar.address, amount, { from: admin })
+      const tx = registrar.transferAndRegister(
+        upkeepName,
+        emptyBytes,
+        mock.address,
+        executeGas,
+        admin,
+        emptyBytes,
+        amount1,
+        source,
+        { from: admin }
+      )
+
+      await expectRevert.unspecified(tx, "")
+    })
+  });
+
   describe("#approve", () => {
     let hash
 
