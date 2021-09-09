@@ -61,6 +61,10 @@ contract UpkeepRegistrationRequests is Owned {
         uint256 indexed upkeepId
     );
 
+    event RegistrationRejected(
+        bytes32 indexed hash
+    );
+
     event ConfigChanged(
         bool enabled,
         uint32 windowSizeInBlocks,
@@ -184,6 +188,7 @@ contract UpkeepRegistrationRequests is Owned {
         require(request.admin != address(0), "request not found");
         delete s_pendingRequests[hash];
         require(LINK.transfer(msg.sender, request.balance), "LINK token transfer failed");
+        emit RegistrationRejected(hash);
     }
 
     /**
