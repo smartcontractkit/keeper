@@ -459,6 +459,17 @@ contract("UpkeepRegistrationRequests", (accounts) => {
         amount,
         abiEncodedBytes
       );
+
+      let event_RegistrationRejected = receipt.rawLogs.some((l) => {
+        return (
+            l.topics[0] ==
+            web3.utils.keccak256("event_RegistrationRejected(bytes32)")
+        );
+      });
+      assert.ok(
+          event_RegistrationRejected,
+          "RegistrationRejected event not emitted"
+      );
     })
 
     it("reverts if not called by the admin / owner", async () => {
