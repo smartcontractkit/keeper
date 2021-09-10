@@ -1,7 +1,7 @@
 const ethers = require("ethers");
 const { LinkToken } = require("@chainlink/contracts/truffle/v0.4/LinkToken");
 const { MockV3Aggregator } = require("@chainlink/contracts/truffle/v0.6/MockV3Aggregator");
-const { BN, expectRevert } = require("@openzeppelin/test-helpers");
+const { BN, expectRevert, expectEvent } = require("@openzeppelin/test-helpers");
 
 const KeeperRegistry = artifacts.require("KeeperRegistry");
 const UpkeepRegistrationRequests = artifacts.require("UpkeepRegistrationRequests");
@@ -411,7 +411,8 @@ contract("UpkeepRegistrationRequests", (accounts) => {
     })
 
     it("approves an existing registration request", async () => {
-      await registrar.approve(upkeepName, mock.address, executeGas, admin, emptyBytes, hash, { from: registrarOwner })
+      const receipt = await registrar.approve(upkeepName, mock.address, executeGas, admin, emptyBytes, hash, { from: registrarOwner })
+      await expectEvent(receipt, "RegistrationApproved")
     })
 
     it("deletes the request afterwards / reverts if the request DNE", async () => {
@@ -473,9 +474,10 @@ contract("UpkeepRegistrationRequests", (accounts) => {
 
     it("refunds the total request balance to the admin address", async () => {
       const before = await linkToken.balanceOf(admin)
-      await registrar.cancel(hash, { from: admin })
+      const receipt = await registrar.cancel(hash, { from: admin })
       const after = await linkToken.balanceOf(admin)
       assert.isTrue(after.sub(before).eq(amount.mul(new BN(2))))
+      await expectEvent(receipt, "RegistrationRejected", {hash})
     })
 
     it("deletes the request hash", async () => {
