@@ -423,6 +423,7 @@ contract("UpkeepRegistrationRequests", (accounts) => {
 
   describe("#cancel", () => {
     let hash
+    let rawLogs
 
     beforeEach(async () => {
       await registrar.setRegistrationConfig(
@@ -452,23 +453,13 @@ contract("UpkeepRegistrationRequests", (accounts) => {
         amount,
         abiEncodedBytes
       );
+      rawLogs = receipt.rawLogs
       hash = receipt.rawLogs[2].topics[1]
       // submit duplicate request (increase balance)
       await linkToken.transferAndCall(
         registrar.address,
         amount,
         abiEncodedBytes
-      );
-
-      let event_RegistrationRejected = receipt.rawLogs.some((l) => {
-        return (
-            l.topics[0] ==
-            web3.utils.keccak256("event_RegistrationRejected(bytes32)")
-        );
-      });
-      assert.ok(
-          event_RegistrationRejected,
-          "RegistrationRejected event not emitted"
       );
     })
 
@@ -487,6 +478,17 @@ contract("UpkeepRegistrationRequests", (accounts) => {
       await registrar.cancel(hash, { from: admin })
       const after = await linkToken.balanceOf(admin)
       assert.isTrue(after.sub(before).eq(amount.mul(new BN(2))))
+
+      let event_RegistrationRejected = rawLogs.some((l) => {
+        return (
+            l.topics[0] ==
+            web3.utils.keccak256("event_RegistrationRejected(bytes32)")
+        );
+      });
+      assert.ok(
+          event_RegistrationRejected,
+          "RegistrationRejected event not emitted"
+      );
     })
 
     it("deletes the request hash", async () => {
