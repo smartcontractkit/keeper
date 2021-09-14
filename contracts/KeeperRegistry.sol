@@ -223,7 +223,7 @@ contract KeeperRegistry is
   {
     require(target.isContract(), "target is not a contract");
     require(gasLimit >= CALL_GAS_MIN, "min gas is 2300");
-    require(gasLimit <= CALL_GAS_MAX, "max gas is 2500000");
+    require(gasLimit <= CALL_GAS_MAX, "max gas is 5000000");
 
     id = s_upkeepCount;
     s_upkeep[id] = Upkeep({

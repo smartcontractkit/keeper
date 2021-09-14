@@ -224,7 +224,7 @@ contract('KeeperRegistry', (accounts) => {
           emptyBytes,
           { from: owner }
         ),
-        'max gas is 2500000'
+        'max gas is 5000000'
       )
     })
 
